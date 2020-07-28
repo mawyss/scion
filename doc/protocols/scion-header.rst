@@ -408,3 +408,311 @@ Because of its special structure, no PathMeta header is needed. There is only a
 single info field and the appropriate hop field can be processed by a border
 router based on the source and destination address, i.e., ``if srcIA == self.IA:
 CurrHF := 0`` and ``if dstIA == self.IA: CurrHF := 1``.
+
+
+
+
+
+
+
+
+.. -------------------------------------------------------------------
+
+Path Type: EPIC
+===============
+The EPIC Path Type is equal to the SCION Path Type, except for the following additions:
+   - An additional *EV* (EPIC Version) field in the Path Meta Header.
+   - An additional *PacketTimestamp* field (8 bytes), which is placed after the very last HopField.
+   - Depending on the value of EV, the Packet Timestamp is either followed by the 
+     4-byte *LHVF* (Last Hop Verification Field) or by the 16-byte *DVF* (Destination Validation Field).
+
+::
+
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          PathMetaHdr                          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           InfoField                           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                              ...                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           InfoField                           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           HopField                            |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                              ...                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           HopField                            |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        PacketTimestamp                        |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                          DVF / LHVF                           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Path Meta Header
+----------------
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | C |  CurrHF   |  RSV  |EV |  Seg0Len  |  Seg1Len  |  Seg2Len  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+EPIC Version (EV):
+   - EV = 0: Standard SCION with EPIC L1 only on the last hop of the last segment.
+   - EV = 1: EPIC L2
+   - EV = 2: *unused (may be used for EPIC L3 in the future)*
+   - EV = 3: *unused*
+
+Info Field
+----------
+The EPIC Info Field is the same as the SCION Info Field.
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |r r r r r r P C|      RSV      |             SegID             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           Timestamp                           |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+Hop Field
+---------
+The EPIC Hop Field is the same as the SCION Hop Field.
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |r r r r r r I E|    ExpTime    |           ConsIngress         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |        ConsEgress             |                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+    |                              MAC                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+For EPIC Version 1, we reduce the size of the MAC field and 
+assign a 4-byte Hop Validation Field (HVF) to the freed space.
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |r r r r r r I E|    ExpTime    |           ConsIngress         |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |        ConsEgress             |              MAC              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                              HVF                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Packet Timestamp
+----------------
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             TsRel                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |    CoreID     |                  CoreCounter                  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+TsRel
+  A 4-byte timestamp relative to the path Timestamp (we call it 
+  TsPath now) in the Info Field. TsRel is calculated by the 
+  source host as follows:
+
+.. math::    
+    \begin{align}
+    \text{Ts} &= \text{unix timestamp [ms]} \\
+    \text{TsRel} &= \text{Ts} - (1000 \times \text{TsPath [s]}) \\
+    \textit{Get back the time when} &\textit{the packet 
+        was timestamped:} \\
+    \text{Ts} &= (\text{TsPath} \times 1000) + \text{TsRel [ms]} \\
+    \end{align}
+
+CoreID
+  Unique identifier representing one of the cores of the source host.
+  Creating a timestamp can result in collisions when sending packets 
+  at high speeds or when using multiple cores. The combination of 
+  CoreID and CoreCounter can sort out this problem.
+
+CoreCounter
+  Current value of the core counter belonging to the core specified 
+  by CoreID. Every time a core sends an EPIC packet, it increases 
+  its core counter (modular addition by 1).
+
+
+Last Hop Validation Field (LHVF)
+----------------------------------
+::
+
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             LHVF                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+This 4-byte field is only present if the EPIC Version is 0. It 
+contains the EPIC L1 Hop Validation Field of the last hop of the 
+last segment. 
+
+Destination Validation Field (DVF)
+----------------------------------
+::
+
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +                              DVF                              +
+    |                                                               |
+    +                                                               +
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The 16-byte Destination Validation Field is only present if the EPIC 
+Version is 1. The DVF contains the MAC calculated by the source host 
+to authenticate itself to the destination host.
+
+EPIC Header Length Calculation
+------------------------------
+The length of the EPIC Path header is the same as the SCION Path
+header plus 8 bytes (Packet Timestamp), and plus 4 bytes in case of 
+EPIC version 0 or 16 bytes in case of EPIC version 1.
+
+
+Procedures in EPIC Version 0
+----------------------------
+
+**Control plane:**
+The beaconing process is the same as for SCION, but the last hop not 
+only adds the 6 bytes of the truncated MAC, but further appends the 
+remaining 10 bytes, which together define the 16-byte authenticator 
+:math:`{\sigma_{\text{LH}}}` for the last hop (LH). 
+
+**Data plane:**
+The source fetches the path, including all the 6-byte short hop 
+authenticators and the remaining 10 bytes of the last authenticator, 
+from the path server. It copies the short authenticators to the 
+corresponding MAC-subfield of the Hop Fields as in standard SCION 
+and adds the current Packet Timestamp. 
+In addition, it calculates the Last Hop Validation Field as follows:
+
+.. math::    
+    \begin{align}
+    \text{Origin} &= \text{(SrcISD, SrcAS, SrcHostAddr)} \\
+    \text{LHVF} &= \text{MAC}_{\sigma_{\text{LH}}}
+        (\text{PacketTimestamp}, 
+        \text{Origin}, \text{PayloadLen})~\text{[0:4]}
+    \end{align}
+
+The border routers of the on-path ASes validate and forward the 
+data plane packets as in standard SCION (recalculate 
+:math:`\sigma_{i}` and compare to the MAC field in the packet). In 
+addition, the last hop of the last segment recomputes and verifies 
+the LHVF field (:math:`\sigma_{\text{LH}} = \sigma_{i}`, where i is 
+the last hop). If the verification fails, the packet is dropped.
+
+Procedures in EPIC Version 1
+----------------------------
+
+**Control plane:**
+The beacons have to additionally carry a new 16-byte authenticator 
+for each AS on the path. The new EPIC-authenticator is calculated in 
+almost the same way as in standard SCION, but with an additional 
+constant :math:`C_{\text{EPIC}}` prepended to the MAC input:    
+
+.. math::    
+    \begin{align}
+    \sigma_i^{\text{EPIC}} &= \text{MAC}_{K_i}(C_{\text{EPIC}} || 
+        TsPath || ExpTime_i || InIF_i || EgIF_i || \beta_i) \\
+    \sigma_i^{\text{P, EPIC}} &= \text{MAC}_{K_i}(C_{\text{EPIC}} || 
+        TsPath || ExpTime_i^P || InIF_i^P || 
+        EgIF_i^P || \beta_{i+1}) \\
+    where \\
+    C_{\text{EPIC}} &= 0x391c
+    \end{align}
+
+Note that the input to the MAC function now consists of 15 instead of 
+11 bytes, but still requires only one encryption operation for block 
+cipher based MACs. Also note that :math:`\beta_{0}^EPIC = \beta_{0}`. 
+Because the MAC-calculations are different, :math:`\beta_{i}^EPIC 
+\neq \beta_{i}` (for i > 0), however.
+
+**Data plane:**
+The source host fetches the path, including all the 16-byte EPIC 
+authenticators, from the path server. It also retrieves the 
+host-level DRKeys (:math:`K_i^S` between the source host and the 
+on-path ASes, and :math:`K_{SD}` between the source host and the 
+destination host) from the certificate server. The source then 
+calculates the Hop Validation Fields (:math:`V_i`) and the 
+Destination Validation Field (:math:`V_{\text{SD}}`):
+
+.. math::    
+    \begin{align}
+    V_i &= \text{MAC}_{K_i^{\text{S}}}(\text{PacketTimestamp}, 
+        \text{Origin}, \sigma_i^{\text{EPIC}}, \text{PayloadLen})
+        ~\text{[0:4]} \\
+    V_{\text{SD}} &= \text{MAC}_{K_{\text{SD}}}
+        (\text{PacketTimestamp, Path, Payload}) \\
+    where \\
+    \text{Path} &= (\text{TsPath}, \text{Address Header}, 
+        HI_1, ..., HI_n)\\
+    HI_i &= (\text{ExpTime}_i, \text{ConsIngress}_i, 
+        \text{ConsEgress}_i) \\
+    \end{align}
+
+Depending on the implementation of the MAC, we also need to prepend 
+the length of the input (additional 2 bytes). As in SCION, the source 
+writes all the :math:`\sigma_i^{\text{EPIC}}` / 
+:math:`\sigma_i^{\text{P, EPIC}}` to the MAC-subfield of the Hop 
+Fields, but in this case truncates the MAC to 2 bytes instead of 6 
+bytes. The :math:`V_i` are subsequently stored in the HVF-subfield of 
+the Hop Fields, and :math:`V_{\text{SD}}` in the DVF field of the 
+EPIC Path Type Header. The source host writes the necessary 
+:math:`\beta` to the SegID of the Info Fields as in standard SCION.
+
+The border routers perform the same operations as in SCION. In 
+addition, they derive the necessary DRKey (:math:`K_i^S`), and 
+recompute and validate the :math:`V_i`.
+
+Upon receiving a packet, the destination fetches :math:`K_{SD}` from 
+its local certificate server, recomputes :math:`V_{\text{SD}}` and 
+performs validation by comparing it to the DVF in the packet. 
+
+Configuration
+-------------
+Network operators should be able to clearly define which kind of 
+traffic (SCION, EPIC v0, EPIC v1, and other protocols) they want to
+allow. 
+Therefore, for each AS and every interface pair, an AS can be 
+configured with flags to allow only certain types of traffic: 
+
+.. math::    
+    \begin{align}
+    \text{AllowedTraffic(If_1, IF_2)} &= \text{(flag_{SCION}, 
+    flag_{EPIC v0}, flag_{EPIC v1})} 
+    \end{align}
+
+To exclusively allow SCION traffic (default) between interfaces 'x' 
+and 'y' we would set:
+
+.. math::    
+    \begin{align}
+    \text{AllowedTraffic(x, y)} &= \text{(1, 0, 0)} 
+    \end{align}
+
+And similarly to only allow EPIC traffic (version 0 and version 1):
+
+.. math::    
+    \begin{align}
+    \text{AllowedTraffic(x, y)} &= \text{(0, 1, 1)} 
+    \end{align}
+
+This affects both the control and the data plane. For example on pure 
+SCION paths, beacons do not collect the EPIC authenticators, and 
+during forwaring every non-SCION packet gets dropped.
+
+
+
