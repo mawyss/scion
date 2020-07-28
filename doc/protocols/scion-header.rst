@@ -422,12 +422,16 @@ Path Type: EPIC
 ===============
 The EPIC Path Type is equal to the SCION Path Type, except for the following additions:
    - An additional *EV* (EPIC Version) field in the Path Meta Header.
-   - An additional *PacketTimestamp* field (8 bytes), which is placed after the very last HopField.
-   - Depending on the value of EV, the Packet Timestamp is either followed by the 
-     4-byte *LHVF* (Last Hop Verification Field) or by the 16-byte *DVF* (Destination Validation Field).
+   - An additional *PacketTimestamp* field (8 bytes), which is 
+     placed at the very beginning of the header.
+   - Depending on the value of EV, the last Hop Field is either 
+     followed by the 4-byte *LHVF* (Last Hop Verification Field) or 
+     by the 16-byte *DVF* (Destination Validation Field).
 
 ::
 
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        PacketTimestamp                        |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                          PathMetaHdr                          |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -443,10 +447,74 @@ The EPIC Path Type is equal to the SCION Path Type, except for the following add
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                           HopField                            |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |                        PacketTimestamp                        |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                          DVF / LHVF                           |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The Packet Timestamp is at the beginning, so that other components 
+like the replay suppression system can access it immediately.
+Note that the part between PacketTimestamp and DVF/LHVF corresponds 
+to the standard SCION header.
+
+Packet Timestamp
+----------------
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             TsRel                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             PckId                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+TsRel
+  A 4-byte timestamp relative to the (segment) Timestamp in the first 
+  Info Field. TsRel is calculated by the source host as follows:
+ 
+.. math::
+    \begin{align}
+        \text{Timestamp}_{\mu s} &= \text{Timestamp [s]} 
+            \times 10^6 \\
+        \text{Ts} &= \text{current unix timestamp [\mu s]}  \\
+        \text{q} &= \left\lfloor\left(\frac{24 \times 60 \times 60 
+            \times 10^6}{2^{32}}\right)\right\rfloor\text{\mu s}
+            = \text{20 \mu s}\\
+        \text{TsRel} &= \text{max} \left\{0, 
+            \frac{\text{Ts - Timestamp}_{\mu s}}
+            {\text{q}} -1 \right\} \\
+        \textit{Get back the time when} &\textit{the packet 
+        was timestamped:} \\
+        \text{Ts} &= \text{Timestamp}_{\mu s} + (1 + \text{TsRel}) 
+            \times \text{q} 
+    \end{align}
+
+TsRel has a precision of :math:`\text{20 \mu s}` and covers almost 
+one day. When sending packets at high speeds (more than one packet 
+every :math:`\text{20 \mu s}`) or when using multiple cores, 
+collisions may occur in TsRel. To solve this problem, the source 
+further identifies the packet using PckId.
+
+PckId
+  A 4-byte identifier that allows to distinguish two packets with 
+  the same TsRel. Every source is free to set PckId arbitrarily, but 
+  we recommend to use the following structure:
+
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |    CoreID     |                  CoreCounter                  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+        
+CoreID
+  Unique identifier representing one of the cores of the source host.
+
+CoreCounter
+  Current value of the core counter belonging to the core specified 
+  by CoreID. Every time a core sends an EPIC packet, it increases 
+  its core counter (modular addition by 1).
+
 
 Path Meta Header
 ----------------
@@ -459,10 +527,17 @@ Path Meta Header
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 EPIC Version (EV):
-   - EV = 0: Standard SCION with EPIC L1 only on the last hop of the last segment.
-   - EV = 1: EPIC L2
-   - EV = 2: *unused (may be used for EPIC L3 in the future)*
-   - EV = 3: *unused*
+   - **EV = 0:** Standard SCION with EPIC L1 only on the last hop of the 
+     last segment. In standard SCION, an attacker that once observed 
+     or brute-forced the hop authenticators for some path can use 
+     them to send arbitrary traffic along this path. EPIC Version 0 
+     solves this problem, which is particularly important for the 
+     security of hidden paths.
+   - **EV = 1:** Implements EPIC L2 (source authentication). Every 
+     AS on the path can verify the authenticity of every EPIC 
+     Version 1 packet.
+   - **EV = 2:** *unused (may be used for EPIC L3 in the future)*
+   - **EV = 3:** *unused*
 
 Info Field
 ----------
@@ -480,7 +555,11 @@ The EPIC Info Field is the same as the SCION Info Field.
 
 Hop Field
 ---------
-The EPIC Hop Field is the same as the SCION Hop Field.
+For EPIC Version 0, the EPIC Hop Field is the same as the SCION Hop 
+Field, and also the calculation of the MAC is identical. This allows 
+the destination host to directly send back an answer to the source 
+by inverting the path.
+
 ::
 
      0                   1                   2                   3
@@ -495,6 +574,8 @@ The EPIC Hop Field is the same as the SCION Hop Field.
 
 For EPIC Version 1, we reduce the size of the MAC field and 
 assign a 4-byte Hop Validation Field (HVF) to the freed space.
+The total size of the Hop Field stays the same (12 bytes).
+
 ::
 
      0                   1                   2                   3
@@ -506,43 +587,6 @@ assign a 4-byte Hop Validation Field (HVF) to the freed space.
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                              HVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-Packet Timestamp
-----------------
-::
-
-     0                   1                   2                   3
-     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |                             TsRel                             |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |    CoreID     |                  CoreCounter                  |
-    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-TsRel
-  A 4-byte timestamp relative to the path Timestamp (we call it 
-  TsPath now) in the Info Field. TsRel is calculated by the 
-  source host as follows:
-
-.. math::    
-    \begin{align}
-    \text{Ts} &= \text{unix timestamp [ms]} \\
-    \text{TsRel} &= \text{Ts} - (1000 \times \text{TsPath [s]}) \\
-    \textit{Get back the time when} &\textit{the packet 
-        was timestamped:} \\
-    \text{Ts} &= (\text{TsPath} \times 1000) + \text{TsRel [ms]} \\
-    \end{align}
-
-CoreID
-  Unique identifier representing one of the cores of the source host.
-  Creating a timestamp can result in collisions when sending packets 
-  at high speeds or when using multiple cores. The combination of 
-  CoreID and CoreCounter can sort out this problem.
-
-CoreCounter
-  Current value of the core counter belonging to the core specified 
-  by CoreID. Every time a core sends an EPIC packet, it increases 
-  its core counter (modular addition by 1).
 
 
 Last Hop Validation Field (LHVF)
