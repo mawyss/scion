@@ -542,7 +542,7 @@ Procedures
 ----------
 
 **Control plane:**
-The beaconing process is the same as for SCION, but the last hop not 
+The beaconing process is the same as for SCION, but the last AS not 
 only adds the 6 bytes of the truncated MAC, but further appends the 
 remaining 10 bytes, which together define the 16-byte authenticator 
 :math:`{\sigma_{\text{LH}}}` for the last hop (LH). 
@@ -689,10 +689,10 @@ constant :math:`C_{\text{EPIC}}` prepended to the MAC input:
 .. math::    
     \begin{align}
     \sigma_i^{\text{EPIC}} &= \text{MAC}_{K_i}(C_{\text{EPIC}} || 
-        TsPath || ExpTime_i || InIF_i || EgIF_i || \beta_i) \\
+        TsPath || ExpTime_i || InIF_i || EgIF_i || \beta_i^\text{EPIC}) \\
     \sigma_i^{\text{P, EPIC}} &= \text{MAC}_{K_i}(C_{\text{EPIC}} || 
         TsPath || ExpTime_i^P || InIF_i^P || 
-        EgIF_i^P || \beta_{i+1}) \\
+        EgIF_i^P || \beta_{i+1}^\text{EPIC}) \\
     where \\
     C_{\text{EPIC}} &= 0x391c
     \end{align}
@@ -736,23 +736,23 @@ the Hop Fields, and :math:`V_{\text{SD}}` in the DVF field.
 The source host writes the necessary 
 :math:`\beta` to the SegID of the Info Fields as in standard SCION.
 
-The border routers perform the same operations as in SCION. In 
-addition, they derive the necessary DRKey (:math:`K_i^S`), and 
-recompute and validate the :math:`V_i`.
+The border routers perform the same operations as in SCION (see 
+"Path Calculation" in the SCION Path Type section), but using 
+:math:`\beta_i^\text{EPIC}`, :math:`\sigma_i^\text{EPIC}` and 
+:math:`\sigma_i^\text{P, EPIC}` instead of :math:`\beta_i`, 
+:math:`\sigma_i` and :math:`\sigma_i^P`. This is possible, because 
+the Hop Fields in EPIC-SAPV still contain the two bytes of the MAC 
+that are necessary for the chaining of the hops.
+In addition, the border routers derive the necessary DRKey 
+(:math:`K_i^S`), and recompute and validate the :math:`V_i`.
 
-Upon receiving a packet, the destination fetches :math:`K_{SD}` from 
-its local certificate server, recomputes :math:`V_{\text{SD}}` and 
-performs validation by comparing it to the DVF in the packet. 
-
+Upon receiving a packet, the destination host fetches :math:`K_{SD}` 
+from its local certificate server, recomputes :math:`V_{\text{SD}}` 
+and performs validation by comparing it to the DVF in the packet. 
 
 
 Details of the EPIC Path Types
 ==============================
-
-Cryptographic Primitives
-------------------------
-
-
 
 Configuration
 -------------
@@ -806,10 +806,23 @@ It also contains the following per-AS fields:
   - The EPIC-SAPV authenticators: 
     :math:`\sigma_i^{\text{EPIC}}` and 
     :math:`\sigma_i^{\text{P, EPIC}}` respectively (16 bytes).
+  - The 2-byte beta field: :math:`\beta_{i+1}^\text{EPIC}` (:math:`\beta_{0}` is already stored in the beacon, every AS i :math:`\in \{0, 1, ...\}` adds :math:`\beta_{i+1}^\text{EPIC}`)
 
 
-
-
+Cryptographic Primitives
+------------------------
+In EPIC, hosts and ASes need to agree on what implementation of the 
+MAC they want to use. Different ASes may not necessarily agree on 
+one globally fixed MAC algorithm however. EPIC therefore leverages 
+CASA (Cryptographic Agility for SCION ASes), where each AS promotes 
+the supported MAC algorithm in the beacons. This way the border 
+routers are still very efficient, as they do only have to support 
+the MAC specified by their AS. The source hosts know the required 
+MAC algorithm of each on-path AS (this information is fetched 
+together with the path) and support all the different MAC algorithms.
+Note that the structure of the data plane packets does not need to 
+be changed, i.e., there is no field necessary to specify the MAC 
+algorithm.
 
 
 
