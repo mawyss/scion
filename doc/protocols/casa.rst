@@ -23,10 +23,10 @@ algorithms they support. A more sophistic approach would be that
 each AS promotes the subset of algorithms (from some globally 
 defined set of algorithms) that it supports, similarly to the 
 exchange of cipher suites in TLS handshakes. This means however, 
-that the data plane packets need to introduce an additional field, 
-which identifies the selected algorithm. For DRKey and EPIC, border 
-routers would need to potentially support many different algorithms, 
-which hinders scalability and performance.
+that the data plane packets need to introduce an additional field 
+for each AS, which identifies the selected algorithm. For DRKey and 
+EPIC, border routers would need to potentially support many 
+different algorithms, which hinders scalability and performance.
 
 CASA can provide most of the advantages of both those two options, 
 while avoiding their drawbacks: it is a tradeoff between simplicity 
