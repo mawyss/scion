@@ -27,6 +27,9 @@ that the data plane packets need to introduce an additional field
 for each AS, which identifies the selected algorithm. For DRKey and 
 EPIC, border routers would need to potentially support many 
 different algorithms, which hinders scalability and performance.
+Also, border routers are likely less agile in adopting new 
+cryptographic algorithms.
+
 
 CASA can provide most of the advantages of both those two options, 
 while avoiding their drawbacks: it is a tradeoff between simplicity 
@@ -64,6 +67,8 @@ entities.
 On the other hand, the protocol-specific categories serve the needs 
 of protocols that have additional requirements like high 
 performance. 
+In case an algorithm for a protocol-specific category is announced, 
+it has priority over the one specified in the general category. 
 
 Those algorithms are then primarily announced in the beacons, but 
 can also be exchanged in protocol-specific channels, for example 
@@ -91,7 +96,9 @@ due to CASA amounts to 80 bytes.
 Advantages
 ----------
 With CASA, every AS is free to choose which cryptographic algorithms 
-it wants to support, there is no global agreement necessary. 
+it wants to support, there is no global agreement necessary, 
+except for the different categories and their options regarding the 
+algorithms. 
 Furthermore, CASA introduces only a small overhead in the beacons 
 and does not affect the layout of the data plane packets in any way, 
 meaning that no additional fields are necessary.
