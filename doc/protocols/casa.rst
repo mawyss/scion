@@ -39,8 +39,8 @@ Description
 -----------
 In CASA, every AS chooses exactly **one algorithm** per algorithm 
 category. Those categories are globally defined and can either be 
-general (PRF, MAC, ...) or protocol-specific (DRKEY-PRF, 
-EPIC-MAC-HVF, EPIC-MAC-DVF, ...).
+general (PRF, MAC, ...) or protocol-specific (PRF-DRKEY, 
+MAC-EPIC-HVF, MAC-EPIC-DVF, ...).
 
 ::
 
@@ -49,11 +49,11 @@ EPIC-MAC-HVF, EPIC-MAC-DVF, ...).
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     | PRF:          | CBC-MAC-AES |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    | DRKEY-PRF:    | CBC-MAC-AES |
+    | MAC-EPIC-HVF: | Poly1305    |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    | EPIC-MAC-HVF: | Poly1305    |
+    | MAC-EPIC-DVF: | Poly1305    |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    | EPIC-MAC-DVF: | Poly1305    |
+    | PRF-DRKEY:    | CBC-MAC-AES |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     | ...           | ...         |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -68,6 +68,14 @@ performance.
 Those algorithms are then primarily announced in the beacons, but 
 can also be exchanged in protocol-specific channels, for example 
 when ASes fetch each others first-level DRKeys.
+
+Note the asymmetry in the CASA design: 
+There is in general one side with higher and one with lower 
+efficiency requirements. The side that requires higher efficiency 
+chooses the algorithm to be used, as it is the one that is primarily 
+affected by the algorithm's performance. This mirrors the design of 
+DRKey, where one side has to fetch the key (slow), and the other side 
+can recompute the key on the fly (fast). 
 
 Beaconing Extensions
 --------------------
@@ -90,4 +98,16 @@ meaning that no additional fields are necessary.
 The border routers of the ASes only need to implement the small 
 number of algorithms promoted by their AS, which minimizes their 
 overhead and prevents performance degradation.
+
+Algorithm Categories
+--------------------
+The following categories are supported:
+
+MAC
+^^^
+This category contains the following MAC algorithms: 
+
+PRF
+^^^
+This category contains the following PRF algorithms: 
 

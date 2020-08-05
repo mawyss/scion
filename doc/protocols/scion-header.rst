@@ -55,8 +55,8 @@ PayloadLen
 PathType
     The PathType specifies the SCION path type with up to 256 different types.
     The format of each path type is independent of each other. The initially
-    proposed SCION path types are SCION (0), OneHopPath (1), EPIC (2) and
-    COLIBRI (3). Here, we only specify the SCION and OneHopPath path types.
+    proposed SCION path types are SCION (0), OneHopPath (1), EPIC-HP (2),
+    EPIC-SAPV (3) and COLIBRI (4).
 DT/DL/ST/SL
     DT/ST and DL/SL encode host-address type and host-address length,
     respectively, for destination/ source. The possible host address length
@@ -409,13 +409,6 @@ single info field and the appropriate hop field can be processed by a border
 router based on the source and destination address, i.e., ``if srcIA == self.IA:
 CurrHF := 0`` and ``if dstIA == self.IA: CurrHF := 1``.
 
-
-
-
-
-
-
-
 .. -------------------------------------------------------------------
 
 Path Type: EPIC-HP
@@ -455,7 +448,6 @@ the destination host to directly send back a SCION answer packet to the source b
     |                             LHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-
 Packet Timestamp
 ----------------
 ::
@@ -477,9 +469,9 @@ TsRel
         \text{Timestamp}_{\mu s} &= \text{Timestamp [s]} 
             \times 10^6 \\
         \text{Ts} &= \text{current unix timestamp [\mu s]}  \\
-        \text{q} &= \left\lfloor\left(\frac{24 \times 60 \times 60 
-            \times 10^6}{2^{32}}\right)\right\rfloor\text{\mu s}
-            = \text{20 \mu s}\\
+        \text{q} &= \left\lceil\left(\frac{24 \times 60 \times 60 
+            \times 10^6}{2^{32}}\right)\right\rceil\text{\mu s}
+            = \text{21 \mu s}\\
         \text{TsRel} &= \text{max} \left\{0, 
             \frac{\text{Ts - Timestamp}_{\mu s}}
             {\text{q}} -1 \right\} \\
@@ -489,11 +481,11 @@ TsRel
             \times \text{q} 
     \end{align}
 
-TsRel has a precision of :math:`\text{20 \mu s}` and covers almost 
-one day. When sending packets at high speeds (more than one packet 
-every :math:`\text{20 \mu s}`) or when using multiple cores, 
-collisions may occur in TsRel. To solve this problem, the source 
-further identifies the packet using PckId.
+TsRel has a precision of :math:`\text{21 \mu s}` and covers at least  
+one day (1 day and 63 minutes). When sending packets at high speeds 
+(more than one packet every :math:`\text{20 \mu s}`) or when using 
+multiple cores, collisions may occur in TsRel. To solve this 
+problem, the source further identifies the packet using PckId.
 
 PckId
   A 4-byte identifier that allows to distinguish two packets with 
@@ -518,7 +510,6 @@ CoreCounter
 
 Note that the Packet Timestamp is at the very beginning of the header, this allows other components (like the replay suppression system) to access it without having to go through any parsing overhead. To achieve an even higher precision of the timestamp, the source is free to allocate additional bits from the PckId to TsRel for this purpose.
 
-
 Last Hop Validation Field (LHVF)
 ----------------------------------
 ::
@@ -531,16 +522,13 @@ Last Hop Validation Field (LHVF)
 
 This 4-byte field contains the Hop Validation Field of the last hop of the last segment. 
 
-
 EPIC Header Length Calculation
 ------------------------------
 The length of the EPIC Path header is the same as the SCION Path
 header plus 8 bytes (Packet Timestamp), and plus 4 bytes for the LHVF.
 
-
 Procedures
 ----------
-
 **Control plane:**
 The beaconing process is the same as for SCION, but the last AS not 
 only adds the 6 bytes of the truncated MAC, but further appends the 
@@ -570,15 +558,8 @@ addition, the last hop of the last segment recomputes and verifies
 the LHVF field (:math:`\sigma_{\text{LH}} = \sigma_{i}`, where i is 
 the last hop). If the verification fails, the packet is dropped.
 
-
-
-
-
-
-
-
-
-
+How to only allow EPIC-HP traffic on a hidden path (and not standard 
+SCION packets) is described in the configuration_ section.
 
 .. -------------------------------------------------------------------
 
@@ -610,8 +591,6 @@ The Path Type EPIC-SAPV (EPIC Source Authentication and Path Validation) contain
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                              DVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-
 
 SCION Header Modifications
 --------------------------
@@ -679,7 +658,6 @@ header plus 8 bytes (Packet Timestamp), and plus 16 bytes for the DVF.
 
 Procedures
 ----------
-
 **Control plane:**
 The beacons have to additionally carry a new 16-byte authenticator 
 for each AS on the path. The new EPIC-authenticator is calculated in 
@@ -750,9 +728,9 @@ Upon receiving a packet, the destination host fetches :math:`K_{SD}`
 from its local certificate server, recomputes :math:`V_{\text{SD}}` 
 and performs validation by comparing it to the DVF in the packet. 
 
-
 Details of the EPIC Path Types
 ==============================
+.. _configuration:
 
 Configuration
 -------------
@@ -768,6 +746,8 @@ configured with flags to allow only certain types of traffic:
     flag_\text{EPIC-HP}, flag_\text{EPIC-SAPV})} 
     \end{align}
 
+The order of the interfaces defines the direction. This allows to 
+specify different types of traffic depending on the direction.
 To exclusively allow SCION traffic (default) between interfaces 'x' 
 and 'y' we would set:
 
@@ -808,7 +788,6 @@ It also contains the following per-AS fields:
     :math:`\sigma_i^{\text{P, EPIC}}` respectively (16 bytes).
   - The 2-byte beta field: :math:`\beta_{i+1}^\text{EPIC}` (:math:`\beta_{0}` is already stored in the beacon, every AS i :math:`\in \{0, 1, ...\}` adds :math:`\beta_{i+1}^\text{EPIC}`)
 
-
 Cryptographic Primitives
 ------------------------
 In EPIC, hosts and ASes need to agree on what implementation of the 
@@ -823,10 +802,3 @@ together with the path) and support all the different MAC algorithms.
 Note that the structure of the data plane packets does not need to 
 be changed, i.e., there is no field necessary to specify the MAC 
 algorithm.
-
-
-
-
-
-
-
