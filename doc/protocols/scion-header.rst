@@ -420,7 +420,7 @@ security of hidden paths.
 
 The EPIC-HP header has the following structure:
    - A *PacketTimestamp* field (8 bytes)
-   - The standard SCION header
+   - The path header for the standard SCION Path Type
    - A 4-byte *LHVF* (Last Hop Verification Field) 
 
 The EPIC-HP contains the full SCION header, and also the calculation of the MAC is identical. This allows 
