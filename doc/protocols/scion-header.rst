@@ -420,7 +420,7 @@ security of hidden paths.
 
 The EPIC-HP header has the following structure:
    - A *PacketTimestamp* field (8 bytes)
-   - The standard SCION header
+   - The path header for the standard SCION Path Type
    - A 4-byte *LHVF* (Last Hop Verification Field) 
 
 The EPIC-HP contains the full SCION header, and also the calculation of the MAC is identical. This allows 
@@ -790,10 +790,13 @@ It also contains the following per-AS fields:
 
 Cryptographic Primitives
 ------------------------
+
+.. _CASA: ./casa.rst
+
 In EPIC, hosts and ASes need to agree on what implementation of the 
 MAC they want to use. Different ASes may not necessarily agree on 
 one globally fixed MAC algorithm however. EPIC therefore leverages 
-CASA (Cryptographic Agility for SCION ASes), where each AS promotes 
+CASA_ (Cryptographic Agility for SCION ASes), where each AS promotes 
 the supported MAC algorithm in the beacons. This way the border 
 routers are still very efficient, as they do only have to support 
 the MAC specified by their AS. The source hosts know the required 
