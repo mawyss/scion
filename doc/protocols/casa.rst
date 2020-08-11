@@ -28,7 +28,8 @@ for each AS, which identifies the selected algorithm. For DRKey and
 EPIC, border routers would need to potentially support many 
 different algorithms, which hinders scalability and performance.
 Also, border routers are likely less agile in adopting new 
-cryptographic algorithms.
+cryptographic algorithms as they often contain dedicated hardware for packet 
+processing.
 
 
 CASA can provide most of the advantages of both those two options, 
@@ -117,4 +118,3 @@ This category contains the following MAC algorithms:
 PRF
 ^^^
 This category contains the following PRF algorithms: 
-
