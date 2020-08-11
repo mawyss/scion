@@ -71,9 +71,9 @@ performance.
 In case an algorithm for a protocol-specific category is announced, 
 it has priority over the one specified in the general category. 
 
-Those algorithms are then primarily announced in the beacons, but 
-can also be exchanged in protocol-specific channels, for example 
-when ASes fetch each others first-level DRKeys.
+Those algorithms are then announced in the beacons, so that this 
+information is directly available and does not need to be fetched 
+(from every on-path AS) by each protocol separately.
 
 Note the asymmetry in the CASA design: 
 There is in general one side with higher and one with lower 

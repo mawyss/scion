@@ -420,11 +420,13 @@ security of hidden paths.
 
 The EPIC-HP header has the following structure:
    - A *PacketTimestamp* field (8 bytes)
-   - The path header for the standard SCION Path Type
+   - The path header for the standard SCION Path Type, where one bit of the Path Meta Header is used to indicate whether the sender accepts SCION response packets.
    - A 4-byte *LHVF* (Last Hop Verification Field) 
 
-The EPIC-HP contains the full SCION header, and also the calculation of the MAC is identical. This allows 
+The EPIC-HP header contains the full SCION header, and also the calculation of the MAC is identical. This allows 
 the destination host to directly send back a SCION answer packet to the source by inverting the path.
+This is allowed from a security perspective, because the SCION answer packets do not leak information that would allow unauthorized entities to use the hidden path.
+To protect the services behind the hidden path from DoS-attacks (only authorized entities should be able to access the services, prevent downgrade to standard SCION), ASes need to be able to configure the border routers such that only certain Path Types are allowed (see configuration_ section). 
 
 ::
 
@@ -447,6 +449,20 @@ the destination host to directly send back a SCION answer packet to the source b
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                             LHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Path Meta Header
+----------------
+
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    | C |  CurrHF   |S|   RSV   |  Seg0Len  |  Seg1Len  |  Seg2Len  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+SCION-Response (S)
+  Indicates whether the sender accepts SCION response packets. A sender that is not behind a hidden path can set this flag so that the service knows it has to answer with SCION traffic. A sender that is protected by a hidden path itself does not set this flag, as its AS likely drops standard SCION packets - the service knows that it will have to answer with EPIC-HP instead.
 
 Packet Timestamp
 ----------------
@@ -483,7 +499,7 @@ TsRel
 
 TsRel has a precision of :math:`\text{21 \mu s}` and covers at least  
 one day (1 day and 63 minutes). When sending packets at high speeds 
-(more than one packet every :math:`\text{20 \mu s}`) or when using 
+(more than one packet every :math:`\text{21 \mu s}`) or when using 
 multiple cores, collisions may occur in TsRel. To solve this 
 problem, the source further identifies the packet using PckId.
 
