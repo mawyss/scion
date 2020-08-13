@@ -741,15 +741,15 @@ the last authenticator of the last segment are the same as
 :math:`{\sigma_{\text{SH}}}` and :math:`{\sigma_{\text{LH}}}` in 
 EPIC-HP.
 
-Because every AS has to be able to decide whether it wants to 
-register the path as standard SCION path, it has to be possible to 
-remove the remaining 10 bytes of the authenticators from the 
-beacons, otherwise it would directly leak this information. However, 
-the beacons still have to be verifiable without this information. To 
-solve this problem, we suggest to *only add the hash* of the 10 
-bytes of the authenticators to the authenticated part of the 
-beacon. The 10 bytes of the authenticators would be added to the 
-beacon unauthenticated.
+.. Because every AS has to be able to decide whether it wants to 
+.. register the path as standard SCION path, it has to be possible to 
+.. remove the remaining 10 bytes of the authenticators from the 
+.. beacons, otherwise it would directly leak this information. However, 
+.. the beacons still have to be verifiable without this information. To 
+.. solve this problem, we suggest to *only add the hash* of the 10 
+.. bytes of the authenticators to the authenticated part of the 
+.. beacon. The 10 bytes of the authenticators would be added to the 
+.. beacon unauthenticated.
 
 **Data plane (EPIC Version 2):**
 The source host fetches the path, including all the 16-byte EPIC 
@@ -839,15 +839,13 @@ each AS, which means that the beacons also contain those flags.
 
 Summary of additional beacon extensions
 ---------------------------------------
-A beacon has to additionally carry the following fields:
-  - The remaining 10 bytes of the MAC.
-
-It also contains the following per-AS fields:
+A beacon contains the following per-AS fields:
   - The remaining 10 bytes of the MAC. 
   - AllowedD: Indicates which path types are allowed in the down 
     direction.
   - AllowedU: Indicates which path types are allowed in the up 
-    direction.
+    direction. (1 byte, could be more depending on how many path 
+    types should be supported in the future)
 
 Cryptographic Primitives
 ------------------------
