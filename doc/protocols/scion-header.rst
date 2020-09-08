@@ -414,7 +414,7 @@ CurrHF := 0`` and ``if dstIA == self.IA: CurrHF := 1``.
 Path Type: EPIC-HP
 ==================
 The EPIC-HP (EPIC for Hidden Paths) header provides improved path 
-authorization for the last link of the path. In standard SCION, an 
+authorization for the last link of the path. For the SCION path type, an 
 attacker that once observed or brute-forced the hop authenticators 
 for some path can use them to send arbitrary traffic along this 
 path. EPIC-HP solves this problem on the last link, which is 
@@ -422,21 +422,24 @@ particularly important for the security of hidden paths.
 
 The EPIC-HP header has the following structure:
    - A *PacketTimestamp* field (8 bytes)
-   - The path header for the standard SCION Path Type, where one bit 
+   - The path header of the SCION path type, where one bit 
      of the Path Meta Header is used to indicate whether the sender 
-     accepts SCION response packets.
-   - A 4-byte *SHVF* (Second to last Hop Validation Field)  and a 
+     accepts SCION path type response packets.
+   - A 4-byte *PHVF* (Penultimate Hop Validation Field)  and a 
      4-byte *LHVF* (Last Hop Validation Field)
 
-The EPIC-HP header contains the full SCION header, and also the 
-calculation of the MAC is identical. This allows the destination 
-host to directly send back a SCION answer packet to the source by 
-inverting the path. This is allowed from a security perspective, 
-because the SCION answer packets do not leak information that would 
-allow unauthorized entities to use the hidden path. To protect the 
-services behind the hidden path from DoS-attacks (only authorized 
-entities should be able to access the services, prevent downgrade to 
-standard SCION), ASes need to be able to configure the border 
+The EPIC-HP header contains the full SCION path type header. The 
+calculation of the hop field MAC is identical. This allows the destination 
+host to directly send back **SCION path type** answer packets to the source.
+This can be done by extracting and reversing the SCION path type header contained in the EPIC-HP packet.  
+
+This is allowed from a security perspective, because the SCION path type answer packets do not leak information that would 
+allow unauthorized entities to use the hidden path. In particular, a SCION path type response packet only contains strictly less information than the previously received EPIC-HP packet, as the response packet does not include the PacketTimestamp, the PHVF, and the LHVF.
+
+If the sender is behind a hidden path itself, then it will not accept SCION path type packets, which means that the destination can not send back EPIC-HP packets. Therefore the sender can explicitly specify in the EPIC-HP packet whether it wants the receiver to respond with SCION path type response packets, or with EPIC-HP packets (assuming the receiver has the necessary authenticators to send on the hidden path to the sender).
+
+To protect the services behind the hidden path (only authorized 
+entities should be able to access the services, downgrade to the SCION path type should be prevented, etc.), ASes need to be able to configure the border 
 routers such that only certain Path Types are allowed (see 
 `Configuration`_ section). 
 
@@ -459,7 +462,7 @@ routers such that only certain Path Types are allowed (see
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                           HopField                            |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |                             SHVF                              |
+    |                             PHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                             LHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -476,12 +479,12 @@ Path Meta Header
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 SCION-Response (S)
-  Indicates whether the sender accepts SCION response packets. A 
-  sender that is not behind a hidden path can set this flag so that 
-  the service knows it has to answer with SCION traffic. A sender 
+  Indicates whether the sender accepts SCION path type response packets. A 
+  sender that is not behind a hidden path will set this flag so that 
+  the receiver knows it has to answer with SCION path type traffic. A sender 
   that is protected by a hidden path itself does not set this flag, 
-  as its AS likely drops standard SCION packets - the service knows 
-  that it will have to answer with EPIC-HP instead.
+  as its AS wants to drop SCION path type packets - the receiver knows 
+  that it will have to answer with EPIC-HP instead (assuming it has the necessary authenticators to send on the hidden path to the sender).
 
 Packet Timestamp
 ----------------
@@ -548,53 +551,55 @@ CoreCounter
 Note that the Packet Timestamp is at the very beginning of the 
 header, this allows other components (like the replay suppression 
 system) to access it without having to go through any parsing 
-overhead. To achieve an even higher precision of the timestamp, the 
-source is free to allocate additional bits from the PckId to TsRel 
-for this purpose.
+overhead. 
 
-Hop Validation Fields (SHVF and LHVF)
+.. To achieve an even higher precision of the timestamp, the 
+.. source is free to allocate additional bits from the PckId to TsRel 
+.. for this purpose.
+
+Hop Validation Fields (PHVF and LHVF)
 -------------------------------------
 ::
 
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |                             SHVF                              |
+    |                             PHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                             LHVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-Those 4-byte fields contain the Hop Validation Fields of the second 
-to last and the last hop of the last segment. 
+Those 4-byte fields contain the Hop Validation Fields of the 
+penultimate and the last hop of the last segment. 
 
 EPIC Header Length Calculation
 ------------------------------
 The length of the EPIC Path header is the same as the SCION Path
 header plus 8 bytes (Packet Timestamp), and plus 8 bytes for the 
-SHVF and LHVF.
+PHVF and LHVF.
 
 Procedures
 ----------
 **Control plane:**
-The beaconing process is the same as for SCION, but the second to 
-last and the last AS not only add the 6 bytes of the truncated MAC 
+The beaconing process is the same as for SCION, but the penultimate 
+and the last AS not only add the 6 bytes of the truncated MAC 
 to the beacon, but further append the remaining 10 bytes, which 
 together define the 16-byte authenticators 
-:math:`{\sigma_{\text{SH}}}` for the second to last hop (SH), and 
+:math:`{\sigma_{\text{PH}}}` for the penultimate hop (PH), and 
 :math:`{\sigma_{\text{LH}}}` for the last hop (LH). 
 
 **Data plane:**
 The source fetches the path, including all the 6-byte short hop 
-authenticators and the remaining 10 bytes of second to last and the 
+authenticators and the remaining 10 bytes of penultimate and the 
 last authenticator, from the path server. It copies the short 
 authenticators to the corresponding MAC-subfield of the Hop Fields 
-as in standard SCION and adds the current Packet Timestamp. In 
-addition, it calculates the SHVF and LHVF as follows:
+as for SCION path type packets and adds the current Packet Timestamp. In 
+addition, it calculates the PHVF and LHVF as follows:
 
 .. math::    
     \begin{align}
     \text{Origin} &= \text{(SrcISD, SrcAS, SrcHostAddr)} \\
-    \text{SHVF} &= \text{MAC}_{\sigma_{\text{SH}}}
+    \text{PHVF} &= \text{MAC}_{\sigma_{\text{PH}}}
         (\text{PacketTimestamp}, 
         \text{Origin}, \text{PayloadLen})~\text{[0:4]} \\
     \text{LHVF} &= \text{MAC}_{\sigma_{\text{LH}}}
@@ -603,17 +608,19 @@ addition, it calculates the SHVF and LHVF as follows:
     \end{align}
 
 The border routers of the on-path ASes validate and forward the 
-data plane packets as in standard SCION (recalculate 
-:math:`\sigma_{i}` and compare to the MAC field in the packet). In 
-addition, the second to last hop of the last segment recomputes and 
-verifies the SHVF field (:math:`\sigma_{\text{SH}} = \sigma_{n-1}`, 
-where n is the last hop). If the verification fails, the packet is 
-dropped. Similarly, the last hop of the last segment recomputes and 
-verifies the SHVF field (:math:`\sigma_{\text{LH}} = \sigma_{n}`). 
-If the verification fails, the packet is dropped.
+EPIC-HP data plane packets as for SCION path type packets (recalculate 
+:math:`\sigma_{i}` and compare it to the MAC field in the packet). 
 
-How to only allow EPIC-HP traffic on a hidden path (and not standard 
-SCION packets) is described in the `Configuration`_ section.
+| In addition, the penultimate hop of the last segment recomputes and 
+  verifies the PHVF field (:math:`\sigma_{\text{PH}} = \sigma_{\text{n-2}}\text{[:16]}`, 
+  where n is the number of hops on the path, and where the hops have indices in the range between 0 and n-1). 
+| If the verification fails, the packet is 
+ dropped. Similarly, the last hop of the last segment recomputes and 
+ verifies the LHVF field (:math:`\sigma_{\text{LH}} = \sigma_{\text{n-1}}\text{[:16]}`). 
+ If the verification fails, the packet is dropped.
+
+How to only allow EPIC-HP traffic on a hidden path (and not 
+SCION path type packets) is described in the `Configuration`_ section.
 
 .. -------------------------------------------------------------------
 
@@ -623,8 +630,8 @@ The Path Type EPIC-SAPV (EPIC Source Authentication and Path
 Validation) contains the following parts:
 
    - An 8-byte Packet Timestamp (same as for EPIC-HP).
-   - A slightly modified SCION header.
-   - A 16-byte *DVF* (Destination Validation Field).
+   - A slightly modified SCION header, that now contains two bits for the EPIC Version.
+   - A 16-byte *DVF* (Destination Validation Field), which is only present if the EPIC Version is 2 or 3.
 
 ::
 
@@ -650,12 +657,12 @@ Validation) contains the following parts:
 
 SCION Header Modifications
 --------------------------
-EPIC-SAPV contains the standard SCION header with the following 
+EPIC-SAPV contains the SCION path type header with the following 
 adaptations:
 
    - Two reserved bits of the Meta Header are used to indicate the 
      EPIC Version (EV).
-   - The size of the MAC (six bytes in standard SCION) inside the 
+   - The size of the MAC (six bytes for the SCION path type) inside the 
      Hop Fields is reduced to two bytes, the four bytes of freed 
      space are used for the Hop Validation Field (HVF). 
 
@@ -671,28 +678,18 @@ Path Meta Header
 
 EPIC Version (EV):
    - **EV = 0:** *unused*
-   - **EV = 1:** *unused (in the future this may be used for EPIC-HP 
-     with improved path authorization on every AS on the path, which 
-     corresponds to EPIC Level 1 in the paper.)*
+   - **EV = 1:** *unused (in the future this may be used for a full-path version of EPIC-HP, where every AS on the path has its hop validation field, and not only the penultimate and last ASes on the path)*
    - **EV = 2:** Provides per-packet source authentication: every AS 
      on the path can verify that the packet source is authentic. 
-     Corresponds to EPIC Level 2 in the paper.
    - **EV = 3:** *unused (may be used for path validation in the 
-     future, which corresponds to EPIC Level 3 in the Paper.)*
+     future)*
 
 EPIC Reflected Response (R):
-  Unused at the moment. Meant to indicate that the packet is 
-  a (reflected) response to a previously sent EPIC Version 3 packet.
+  Indicates that the packet is a (reflected) response to a 
+  previously sent EPIC Version 3 packet.
 
 Hop Field
 ^^^^^^^^^
-We reduce the size of the MAC field to 2 bytes and assign a 4-byte 
-Hop Validation Field (HVF) to the freed space. The total size of the 
-Hop Field stays the same (12 bytes). Note that only two bytes of the 
-MAC are involved in the MAC-chaining process (see `Hop Field MAC 
-Computation`_ and `Path Calculation`_), so ASes in EPIC-SAPV can 
-still verifiy the MAC as in standard SCION.
-
 ::
 
      0                   1                   2                   3
@@ -704,6 +701,28 @@ still verifiy the MAC as in standard SCION.
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                              HVF                              |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+| We reduce the size of the MAC field to 2 bytes and assign a 4-byte 
+  Hop Validation Field (HVF) to the freed space. The total size of the 
+  Hop Field stays the same (12 bytes). Note that for SCION path type packets, only two bytes of the hop field 
+  MAC are used:  
+| :math:`\beta_{i+1} &= \beta_i \oplus \sigma_i[:2]` 
+| (see `Hop Field MAC Computation`_ and `Path Calculation`_)
+
+Therefore, ASes in EPIC-SAPV can still verify the MAC the same way it is done for SCION path type packets, even though they only contain 2-byte MACs and not 6-byte MACs.
+
+Below is the example from the `Path Calculation`_ section of the SCION path type, where the MAC is verified for a packet in construction direction.
+In EPIC-SAPV, all the calculations stay exactly the same. The only difference to the verification of SCION path type packets is, that the calculated authenticator is compared to a 2-byte MAC and not to a 6-byte MAC.
+
+In construction direction (down, i.e., ConsDir == 1):
+   #. `SegID` contains :math:`\beta_{i}` at this point.
+   #. Compute :math:`\sigma'_i` with the formula from `Hop Field MAC Computation`_ by replacing
+      :math:`\beta_{i}` with `SegID`.
+   #. Check that the MAC in the hop field **(two bytes for EPIC-SAPV)** matches :math:`\sigma'_{i}`.
+   #. Update `SegID` for the next hop:
+
+      :math:`SegID := SegID \oplus \sigma_i[:2]`
+   #. `SegID` now contains :math:`\beta_{i+1}`.
 
 Destination Validation Field (DVF)
 ----------------------------------
@@ -722,7 +741,7 @@ Destination Validation Field (DVF)
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 The 16-byte Destination Validation Field is only present if the EPIC 
-Version is 1. The DVF contains the MAC calculated by the source host 
+Version is equal to 2 or 3. The DVF contains the MAC calculated by the source host 
 to authenticate itself to the destination host.
 
 EPIC-SAPV Header Length Calculation
@@ -736,13 +755,13 @@ Procedures
 The beaconing process is the same as for SCION, but all the ASes not 
 only add the 6 bytes of the truncated MAC to the beacon, but further 
 append the remaining 10 bytes, which together define the 16-byte 
-authenticators :math:`{ \sigma_i}`.Note that the second to last and 
+authenticators :math:`{ \sigma_i}`.Note that the penultimate and 
 the last authenticator of the last segment are the same as 
-:math:`{\sigma_{\text{SH}}}` and :math:`{\sigma_{\text{LH}}}` in 
+:math:`{\sigma_{\text{PH}}}` and :math:`{\sigma_{\text{LH}}}` in 
 EPIC-HP.
 
 .. Because every AS has to be able to decide whether it wants to 
-.. register the path as standard SCION path, it has to be possible to 
+.. register the path as SCION path type, it has to be possible to 
 .. remove the remaining 10 bytes of the authenticators from the 
 .. beacons, otherwise it would directly leak this information. However, 
 .. the beacons still have to be verifiable without this information. To 
@@ -766,7 +785,7 @@ Destination Validation Field (:math:`V_{\text{SD}}`):
         \text{Origin}, \sigma_i, \text{PayloadLen})
         ~\text{[0:4]} \\
     V_{\text{SD}} &= \text{MAC}_{K_{\text{SD}}}
-        (\text{PacketTimestamp, Path, Payload}) \\
+        (\text{PacketTimestamp, Path, Payload})~\text{[0:16]} \\
     where \\
     \text{Path} &= (\text{TsPath}, \text{Address Header}, 
         HI_1, ..., HI_n)\\
@@ -781,7 +800,7 @@ Hop Fields, but in this case truncates the MAC to 2 bytes instead of
 6 bytes. The :math:`V_i` are subsequently stored in the HVF-subfield 
 of the Hop Fields, and :math:`V_{\text{SD}}` in the DVF field. The 
 source host writes the necessary :math:`\beta` to the SegID of the 
-Info Fields as in standard SCION.
+Info Fields as for the SCION path type.
 
 The border routers perform the same operations as in SCION (see 
 `Path Calculation`_). This is possible, because 
