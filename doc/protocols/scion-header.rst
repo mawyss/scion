@@ -542,6 +542,8 @@ configure the border routers such that only certain Path Types are
 allowed. This is further described in the accompanying EPIC design 
 document (scion/doc/EPIC.md).
 
+.. _EPIC Path Meta Header:
+
 Path Meta Header
 ----------------
 ::
@@ -670,12 +672,26 @@ PHVF and LHVF as follows:
     \begin{align}
     \text{Origin} &= \text{(SrcISD, SrcAS, SrcHostAddr)} \\
     \text{PHVF} &= \text{MAC}_{\sigma_{\text{PH}}}
-        (\text{PacketTimestamp}, 
+        (\text{Flags}, \text{PacketTimestamp}, 
         \text{Origin}, \text{PayloadLen})~\text{[0:4]} \\
     \text{LHVF} &= \text{MAC}_{\sigma_{\text{LH}}}
-        (\text{PacketTimestamp}, 
+        (\text{Flags}, \text{PacketTimestamp}, 
         \text{Origin}, \text{PayloadLen})~\text{[0:4]} \\
     \end{align}
+
+Here, "Flags" is a 1-byte field structured as follows:
+::
+
+     0 1 2 3 4 5 6 7 8 
+    +-+-+-+-+-+-+-+-+-+
+    |S|SL |     0     |
+    +-+-+-+-+-+-+-+-+-+
+
+"S" refers to the SCION-Response flag in the `EPIC Path Meta 
+Header`_, and "SL" denotes the source host address length as defined 
+in the `Common Header`_.
+Because the length of the source host address varies based on SL, 
+also the length of the input to the MAC is dynamic.
 
 The border routers of the on-path ASes validate and forward the 
 EPIC-HP data plane packets as for SCION path type packets 
