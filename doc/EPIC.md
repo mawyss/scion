@@ -10,8 +10,11 @@ Explain EPIC-HP (main application: hidden paths, only last link protected)
 ## EPIC-HP Overview
 
 
-Add image: EPIC-HP, but destination can send back multiple SCION path type packets
-Add image: EPIC-HP, destination sends back EPIC-HP packet
+<p align="center">
+  <img src="fig/EPIC/SCION-reponse-flag.png" width="600">
+</p>
+
+Add image: Really secure hidden path vs. prioritized path
 
 ## Procedures
 
