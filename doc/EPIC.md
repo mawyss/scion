@@ -19,8 +19,17 @@ This is especially important for hidden paths [[2]](#2). Hidden paths are paths 
 EPIC precludes such attacks, making hidden paths more secure.
 
 ## EPIC-HP Overview
-EPIC-HP (EPIC for Hidden Paths) provides the improved security properties of EPIC on the very last inter-AS link of a path. It is meant as a lightweight EPIC version, that was specifically designed to better protect hidden paths.
+EPIC-HP (EPIC for Hidden Paths) provides the improved security properties of EPIC on the very last inter-AS link of a path. It is meant as a lightweight EPIC version and is specifically designed to better protect hidden paths.
 
+### Assumptions
+
+
+<p align="center">
+  <img src="fig/EPIC/path-type-filtering.png" width="630">
+</p>
+
+
+### SCION Path Type Responses
 <p align="center">
   <img src="fig/EPIC/SCION-reponse-flag.png" width="600">
 </p>
