@@ -1,14 +1,26 @@
 # EPIC Design 
 
-This file documents the design rationales and best practices for EPIC-HP.
+This file introduces EPIC and documents the design rationales and best practices for EPIC-HP.
 
 ## Introduction
+One important security property of SCION is that end hosts are not allowed to send packets along arbitrary paths, but only along paths that were advertised by all on-path ASes. 
+This property is called *path authorization*. 
+The ASes only advertise paths that serve their economic interests, and path authorization protects those routing decisions against malicious end hosts.
 
-Explain EPIC, cite paper
-Explain EPIC-HP (main application: hidden paths, only last link protected)
+In SCION, this is implemented by having the ASes create authenticators during beaconing, which end hosts then have to include in the MAC field of their packets. Those MAC fields prove to the ASes, that the packets are allowed to traverse them.
+The MAC fields are static, meaning that they are the same for every packet on that path.
+
+However, this implementation of path authorization is insufficient against more sophisticated adversaries that are able to derive MAC fields, for example by brute-forcing them or by observing them in the data plane packets. Because the MACs are static, once derived MACs for one packet can be reused by the adversary to send arbitrarily many other packets (until the authenticators expire).
+
+The EPIC (Every Packet Is Checked) protocol [[1]](#1) solves this problem by introducing per-packet MACs.
+Even if an adversary is able to brute-force the MACs for one packet, the MACs cannot be reused to send any other traffic.
+Observing MACs from packets in the data plane does also not help an attacker, as he still needs to derive new MACs for every packet he wants to send over an unauthorized path.
+This is especially important for hidden paths [[2]](#2). Hidden paths are paths which are not publicly announced, but only communicated to a group of authorized sources. If one of those sources sends traffic on the hidden path using SCION path type packets, an adversary can observe the MACs and reuse them to send traffic on the hidden path himself. This allows the adversary to reach services that were meant to be hidden, or to launch DOS-attacks directed towards them.
+EPIC precludes such attacks, making hidden paths more secure.
 
 ## EPIC-HP Overview
 
+Explain EPIC-HP (main application: hidden paths, only last link protected)
 
 <p align="center">
   <img src="fig/EPIC/SCION-reponse-flag.png" width="600">
@@ -40,11 +52,25 @@ And similarly to only allow EPIC-HP traffic:
 AllowedTraffic(x, y) = (0, 1, 0, ...)
 
 
+
 ## Best Practices
 
 ### Highly Secure Hidden Paths
 The last and penultimate AS on the hidden path only allow EPIC-HP traffic on the affected interface pair.
 Add image 
 
-### 
+### DoS-Secure Hidden Paths
+
+
+## References
+<a id="1">[1]</a> 
+M. Legner, T. Klenze, M. Wyss, C. Sprenger, A. Perrig. (2020)
+EPIC: Every Packet Is Checked in the Data Plane of a Path-Aware Internet
+Proceedings of the USENIX Security Symposium 
+[[Link]](https://netsec.ethz.ch/publications/papers/Legner_Usenix2020_EPIC.pdf)
+
+<a id="2">[2]</a> 
+Design Document for the Hidden Path Infrastructure
+[[Link]](https://scion.docs.anapaya.net/en/latest/HiddenPaths.html)
+
 
