@@ -15,7 +15,7 @@ However, this implementation of path authorization is insufficient against more 
 The EPIC (Every Packet Is Checked) protocol [[1]](#1) solves this problem by introducing per-packet MACs.
 Even if an adversary is able to brute-force the MACs for one packet, the MACs cannot be reused to send any other traffic.
 Observing MACs from packets in the data plane does also not help an attacker, as he still needs to derive new MACs for every packet he wants to send over an unauthorized path.
-This is especially important for hidden paths [[2]](#2). Hidden paths are paths which are not publicly announced, but only communicated to a group of authorized sources. If one of those sources sends traffic on the hidden path using SCION path type packets, an adversary can observe the MACs and reuse them to send traffic on the hidden path himself. This allows the adversary to reach services that were meant to be hidden, or to launch DOS-attacks directed towards them.
+This is especially important for hidden paths [[2]](#2). Hidden paths are paths which are not publicly announced, but only communicated to a group of authorized sources. If one of those sources sends traffic on the hidden path using SCION path type packets, an on-path adversary can observe the MACs and reuse them to send traffic on the hidden path himself. This allows the adversary to reach services that were meant to be hidden, or to launch DoS attacks directed towards them.
 EPIC precludes such attacks, making hidden paths more secure.
 
 ## EPIC-HP Overview
@@ -25,7 +25,7 @@ EPIC-HP (EPIC for Hidden Paths) provides the improved security properties of EPI
 EPIC-HP makes the following assumptions necessary to provide a meaningful level of security:
 - The AS protected by the hidden path is the last AS.
 By "last AS" we mean that the beacon which defined the hidden path ends in the local interface of this AS. Or stated differently: the AS behind the hidden path does not forward the beacon defining the hidden path to further downstream/peering ASes. 
-- On the interface-pairs (ingress/egress pair) that affect the hidden path, the last two ASes either:
+- On the interface-pairs (ingress/egress pair) that affect the hidden path, the last two ASes employ one of two different strategies in the data plane:
   1. Only allow EPIC-HP path type traffic. See use case "Highly Secure Hidden Paths" [here](#HighlySecureHiddenPaths). The path type filtering is further explained [here](#PathTypeFiltering).
   2. Prioritize EPIC-HP path type traffic. See use case "DOS-Secure Hidden Paths" [here](#DOSSecureHiddenPaths).
 - The last two ASes of the hidden path have a duplicate-suppression system in place. This prohibits DOS attacks based on replayed packets.
@@ -39,7 +39,7 @@ The following figure illustrates those assumptions:
 Here, AS 6 is the AS protected by the hidden path (blue lines). The hidden path ends at the local interface (black dot) of AS 6, so AS 6 did not forward the beacon that defines the hidden path further down to AS 7. 
 This is however still allowed for SCION path type traffic (green lines): there are SCION paths that enter AS 6 from AS 4. One of the two paths ends in the local interface of AS 6, while the other one is extended further to AS 7. 
 
-In this example, the border routers of AS 6 and AS 5 (the last and penultimate ASes on the hidden path) further implement path type filtering (red dots). Metaphorically speaking , they do not allow green lines to overlap with blue lines. For example, AS 5 will block (red "X" in the figure) SCION path type traffic from AS 3 that is destined towards AS 6, as it would affect the hidden path. Instead of blocking non-EPIC-HP path type traffic, ASes could also prioritize EPIC-HP traffic, which would still satisfy the assumptions above.
+In this example, the border routers of AS 6 and AS 5 (the last and penultimate ASes on the hidden path) further implement path type filtering (red dots). For example, AS 5 will block (red "X" in the figure) SCION path type traffic from AS 3 that is destined towards AS 6, as it would affect the hidden path. Instead of blocking non-EPIC-HP path type traffic, ASes could also prioritize EPIC-HP traffic, which would still satisfy the assumptions above.
 
 Of course the ASes can always decide to be more restrictive, for example AS 6 could additionally disallow SCION path type traffic from AS 4, so that its local interface is reachable through the hidden path only.
 
@@ -91,7 +91,7 @@ If some host H1 inside an AS with such a setup wants to communicate with a host 
 Note that hosts behind a hidden path can send SCION path type packets towards hosts in other ASes, but that those hosts can not send a response back if they do not have the necessary authenticators.
 
 ### <a id="DOSSecureHiddenPaths"></a> DoS-Secure Hidden Paths
-The last and penultimate ASes on the hidden path generally allow EPIC-HP traffic, but prioritize it before any other traffic. 
+The last and penultimate ASes on the hidden path allow EPIC-HP and other path types simultaneously, but prioritize traffic using the EPIC-HP path type over the SCION path type.
 This means that DOS attacks are not possible, because an adversary is limited to sending low-priority SCION path type packets. However, an adversary can still reach the services behind the hidden path.
 
 In this scenario, the hosts protected by the hidden path can set the SCION-Response flag to one, so the destination will be able to answer with (arbitrariliy many) SCION path type packets.
@@ -106,5 +106,4 @@ Proceedings of the USENIX Security Symposium
 <a id="2">[2]</a> 
 Design Document for the Hidden Path Infrastructure
 [[Link]](https://scion.docs.anapaya.net/en/latest/HiddenPaths.html)
-
 
