@@ -527,15 +527,16 @@ path type response packet only contains strictly less information
 than the previously received EPIC-HP packet, as the response packet 
 does not include the PacketTimestamp, the PHVF, and the LHVF.
 
-If the sender is behind a hidden path itself, then it is likely that 
-its AS will not accept SCION path type packets, which means that the 
-destination can only respond using EPIC-HP traffic. Therefore the 
-sender can explicitly specify in the EPIC-HP packet whether it wants 
-the receiver to respond with SCION path type response packets, or 
-with EPIC-HP packets (assuming the receiver has the necessary 
-authenticators to send on the hidden path to the sender).
+If the sender is reachable through a hidden path itself, then it is 
+likely that its AS will not accept SCION path type packets, which 
+means that the destination can only respond using EPIC-HP traffic. 
+Therefore the sender can explicitly specify in the EPIC-HP packet 
+whether it wants the receiver to respond with SCION path type 
+response packets, or with EPIC-HP packets (assuming the receiver has 
+the necessary authenticators to send on the hidden path to the 
+sender).
 
-To protect the services behind the hidden path (only authorized 
+To protect the services behind the hidden link (only authorized 
 entities should be able to access the services, downgrade to the 
 SCION path type should be prevented, etc.), ASes need to be able to 
 configure the border routers such that only certain Path Types are 
@@ -658,7 +659,7 @@ append the remaining 10 bytes.
 **Data plane:**
 The source fetches the path, including all the 6-byte short hop 
 authenticators and the remaining 10 bytes of the authenticators, 
-from the path server. We will refer to the fully assembled 16-byte 
+from a (hidden) path server. We will refer to the fully assembled 16-byte 
 authenticators of the penultimate and last hop on the path as 
 :math:`{\sigma_{\text{PH}}}` for the penultimate hop (PH) and 
 :math:`{\sigma_{\text{LH}}}` for the last hop (LH), respectively. 
