@@ -31,6 +31,8 @@ import (
 type ASEntry struct {
 	// Signed contains the signed ASentry. It is used for signature input.
 	Signed *cryptopb.SignedMessage
+	// Unsigned contains the unsigned part of the AS entry.
+	//Unsigned ASEntryUnsigned
 	// Local is the ISD-AS of the AS correspoding to this entry.
 	Local addr.IA
 	// Next is the ISD-AS of the downstream AS.
@@ -43,6 +45,11 @@ type ASEntry struct {
 	MTU int
 	// Extensions holds all the beaconing extensions.
 	Extensions Extensions
+}
+
+type ASEntryUnsigned struct {
+	// The remaining 10 bytes of the MAC
+	EpicMac []byte
 }
 
 // ASEntryFromPB creates an AS entry from the protobuf representation.
@@ -86,6 +93,11 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 
 	extensions := extensionsFromPB(entry.Extensions)
 
+	//unsigned, err := unsignedASEntryFromPB(pb.Unsigned)
+	//if err != nil {
+	//	return ASEntry{}, serrors.WrapStr("parsing unsigned AS entry", err)
+	//}
+
 	return ASEntry{
 		HopEntry:    hopEntry,
 		PeerEntries: peerEntries,
@@ -94,5 +106,19 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 		MTU:         int(entry.Mtu),
 		Extensions:  extensions,
 		Signed:      pb.Signed,
+		//Unsigned:    unsigned,
+	}, nil
+}
+
+// unsignedASEntryFromPB creates the unsigned part of the AS entry from the protobuf representation.
+func unsignedASEntryFromPB(pb *cppb.Unsigned) (ASEntryUnsigned, error) {
+	if pb == nil {
+		return ASEntryUnsigned{}, serrors.New("unsigned AS entry is nil")
+	}
+	if l := len(pb.EpicMac); (l != 10 && l != 0) {
+		return ASEntryUnsigned{}, serrors.New("EPIC MAC must be 0 or 10 bytes", "len", l)
+	}
+	return ASEntryUnsigned{
+		EpicMac: pb.EpicMac,
 	}, nil
 }

@@ -259,15 +259,17 @@ func (ps *PathSegment) AddASEntry(ctx context.Context, asEntry ASEntry, signer S
 		HopEntry: &cppb.HopEntry{
 			IngressMtu: uint32(asEntry.HopEntry.IngressMTU),
 			HopField: &cppb.HopField{
-				ExpTime: uint32(asEntry.HopEntry.HopField.ExpTime),
-				Ingress: uint64(asEntry.HopEntry.HopField.ConsIngress),
-				Egress:  uint64(asEntry.HopEntry.HopField.ConsEgress),
-				Mac:     asEntry.HopEntry.HopField.MAC,
+				ExpTime:     uint32(asEntry.HopEntry.HopField.ExpTime),
+				Ingress:     uint64(asEntry.HopEntry.HopField.ConsIngress),
+				Egress:      uint64(asEntry.HopEntry.HopField.ConsEgress),
+				Mac:         asEntry.HopEntry.HopField.MAC,
+				HashEpicMac: asEntry.HopEntry.HopField.HashEpicMac,
 			},
 		},
 		PeerEntries: make([]*cppb.PeerEntry, 0, len(asEntry.PeerEntries)),
 		Extensions:  extensionsToPB(asEntry.Extensions),
 	}
+
 	for _, peer := range asEntry.PeerEntries {
 		asEntryPB.PeerEntries = append(asEntryPB.PeerEntries,
 			&cppb.PeerEntry{
@@ -275,14 +277,16 @@ func (ps *PathSegment) AddASEntry(ctx context.Context, asEntry ASEntry, signer S
 				PeerInterface: uint64(peer.PeerInterface),
 				PeerMtu:       uint32(peer.PeerMTU),
 				HopField: &cppb.HopField{
-					ExpTime: uint32(peer.HopField.ExpTime),
-					Ingress: uint64(peer.HopField.ConsIngress),
-					Egress:  uint64(peer.HopField.ConsEgress),
-					Mac:     peer.HopField.MAC,
+					ExpTime:     uint32(peer.HopField.ExpTime),
+					Ingress:     uint64(peer.HopField.ConsIngress),
+					Egress:      uint64(peer.HopField.ConsEgress),
+					Mac:         peer.HopField.MAC,
+					HashEpicMac: peer.HopField.HashEpicMac,
 				},
 			},
 		)
 	}
+
 	rawASEntry, err := proto.Marshal(asEntryPB)
 	if err != nil {
 		return serrors.WrapStr("packing AS entry", err)

@@ -16,6 +16,7 @@ package beaconing
 
 import (
 	"context"
+	"crypto/sha512"
 	"encoding/binary"
 	"hash"
 	"time"
@@ -141,12 +142,7 @@ func (s *DefaultExtender) createHopEntry(ingress, egress common.IFIDType, ts tim
 	hopF := s.createHopF(uint16(ingress), uint16(egress), ts, beta)
 	return seg.HopEntry{
 		IngressMTU: int(remoteInMTU),
-		HopField: seg.HopField{
-			ConsIngress: hopF.ConsIngress,
-			ConsEgress:  hopF.ConsEgress,
-			ExpTime:     hopF.ExpTime,
-			MAC:         hopF.Mac,
-		},
+		HopField: hopF,
 	}, nil
 }
 
@@ -163,12 +159,7 @@ func (s *DefaultExtender) createPeerEntry(ingress, egress common.IFIDType, ts ti
 		PeerMTU:       int(remoteInMTU),
 		Peer:          remoteInIA.IA(),
 		PeerInterface: uint16(remoteInIfID),
-		HopField: seg.HopField{
-			ConsIngress: hopF.ConsIngress,
-			ConsEgress:  hopF.ConsEgress,
-			ExpTime:     hopF.ExpTime,
-			MAC:         hopF.Mac,
-		},
+		HopField:      hopF,
 	}, nil
 }
 
@@ -220,7 +211,7 @@ func (s *DefaultExtender) remoteInfo(ifid common.IFIDType) (
 }
 
 func (s *DefaultExtender) createHopF(ingress, egress uint16, ts time.Time,
-	beta uint16) path.HopField {
+	beta uint16) seg.HopField {
 
 	expTime := s.MaxExpTime()
 	input := path.MACInput(beta, util.TimeToSecs(ts), expTime, ingress, egress)
@@ -231,11 +222,16 @@ func (s *DefaultExtender) createHopF(ingress, egress uint16, ts time.Time,
 		panic(err)
 	}
 	fullMAC := mac.Sum(nil)
-	return path.HopField{
+
+	// EPIC: Calculate hash of the remaining 10 bytes of the fullMAC
+	hash := sha512.Sum512(fullMAC[6:16])
+
+	return seg.HopField{
 		ConsIngress: ingress,
 		ConsEgress:  egress,
 		ExpTime:     expTime,
-		Mac:         fullMAC[:6],
+		MAC:         fullMAC[:6],
+		HashEpicMac: hash[:16],
 	}
 }
 
