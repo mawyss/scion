@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/scionproto/scion/go/lib/addr"
+	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/scrypto/signed"
 	"github.com/scionproto/scion/go/lib/serrors"
 	cppb "github.com/scionproto/scion/go/pkg/proto/control_plane"
@@ -32,7 +33,7 @@ type ASEntry struct {
 	// Signed contains the signed ASentry. It is used for signature input.
 	Signed *cryptopb.SignedMessage
 	// Unsigned contains the unsigned part of the AS entry.
-	//Unsigned ASEntryUnsigned
+	Unsigned ASEntryUnsigned
 	// Local is the ISD-AS of the AS correspoding to this entry.
 	Local addr.IA
 	// Next is the ISD-AS of the downstream AS.
@@ -48,8 +49,10 @@ type ASEntry struct {
 }
 
 type ASEntryUnsigned struct {
-	// The remaining 10 bytes of the MAC
-	EpicMac []byte
+	// EPIC: The remaining 10 bytes of the hop entry MAC
+	EpicHopMac []byte
+	// EPIC: The remaining 10 bytes of the peer entry MACs
+	EpicPeerMacs [][]byte
 }
 
 // ASEntryFromPB creates an AS entry from the protobuf representation.
@@ -93,10 +96,10 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 
 	extensions := extensionsFromPB(entry.Extensions)
 
-	//unsigned, err := unsignedASEntryFromPB(pb.Unsigned)
-	//if err != nil {
-	//	return ASEntry{}, serrors.WrapStr("parsing unsigned AS entry", err)
-	//}
+	unsigned, err := unsignedASEntryFromPB(pb.Unsigned, len(entry.PeerEntries))
+	if err != nil {
+		return ASEntry{}, serrors.WrapStr("parsing unsigned AS entry", err)
+	}
 
 	return ASEntry{
 		HopEntry:    hopEntry,
@@ -106,19 +109,58 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 		MTU:         int(entry.Mtu),
 		Extensions:  extensions,
 		Signed:      pb.Signed,
-		//Unsigned:    unsigned,
+		Unsigned:    unsigned,
 	}, nil
 }
 
-// unsignedASEntryFromPB creates the unsigned part of the AS entry from the protobuf representation.
-func unsignedASEntryFromPB(pb *cppb.Unsigned) (ASEntryUnsigned, error) {
+// Creates the unsigned part of the AS entry from the protobuf representation.
+func unsignedASEntryFromPB(pb *cppb.Unsigned, nr_peers int) (ASEntryUnsigned, error) {
+	var EpicHopMac []byte
+	var EpicPeerMacs [][]byte
+
+	log.Debug("Try to parse unsigned part of AS entry from PB", "peers", nr_peers)
+	
+	// Unsigned part must not be nil
 	if pb == nil {
 		return ASEntryUnsigned{}, serrors.New("unsigned AS entry is nil")
 	}
-	if l := len(pb.EpicMac); (l != 10 && l != 0) {
-		return ASEntryUnsigned{}, serrors.New("EPIC MAC must be 0 or 10 bytes", "len", l)
+	// Validate EPIC hop entry MAC
+	if pb.EpicHopMac == nil {
+		return ASEntryUnsigned{}, serrors.New("EPIC MAC of the hop entry is nil")
 	}
+	if pb.EpicHopMac.EpicMac == nil {
+		return ASEntryUnsigned{}, serrors.New("EPIC MAC (bytes) of the hop entry is nil")
+	}
+	EpicHopMac = pb.EpicHopMac.EpicMac
+	if l := len(EpicHopMac); (l != 10 && l != 0) {
+		return ASEntryUnsigned{}, serrors.New("EPIC hop entry MAC must be 0 or 10 bytes", "len", l)
+	}
+	// Validate EPIC MACs of peer entries
+	if len(pb.EpicPeerMacs) != nr_peers {
+		return ASEntryUnsigned{}, serrors.New("Not the same number of EPIC peer MACs and SCION peer MACs")
+	}
+	if len(pb.EpicPeerMacs) != 0 {
+		EpicPeerMacs = make([][]byte, 0, nr_peers)
+	}
+	for i, peerMac := range pb.EpicPeerMacs {
+		var empty []byte
+		if peerMac == nil {
+			EpicPeerMacs = append(EpicPeerMacs, empty)
+			continue
+		}
+		if peerMac.EpicMac == nil {
+			EpicPeerMacs = append(EpicPeerMacs, empty)
+			continue
+		}
+		if l := len(peerMac.EpicMac); (l != 10 && l != 0) {
+			return ASEntryUnsigned{}, serrors.New("EPIC peer entry MAC must be 0 or 10 bytes", "len", l, "index", i)
+		}
+		EpicPeerMacs = append(EpicPeerMacs, peerMac.EpicMac)
+	}
+	log.Debug("Successfully parsed unsigned part of AS entry from PB")
+	
 	return ASEntryUnsigned{
-		EpicMac: pb.EpicMac,
+		EpicHopMac: EpicHopMac,
+		EpicPeerMacs: EpicPeerMacs,
 	}, nil
 }

@@ -124,6 +124,13 @@ message ASEntry {
 }
 
 message Unsigned {
+    // EPIC: extended MAC of the hop entry
+    EpicMac epic_hop_mac = 1;
+    // EPIC: extended MACs of the peer entries
+    repeated EpicMac epic_peer_macs = 2;
+}
+
+message EpicMac {
     // EPIC: remaining 10 bytes of the MAC
     bytes epic_mac = 1;
 }
