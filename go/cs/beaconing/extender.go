@@ -146,13 +146,8 @@ func (s *DefaultExtender) createHopEntry(ingress, egress common.IFIDType, ts tim
 
 	remoteInMTU, err := s.remoteMTU(ingress)
 	if err != nil {
-<<<<<<< HEAD
-		return seg.HopEntry{}, serrors.WrapStr("checking remote ingress interface (mtu)", err,
-			"interfaces", ingress)
-=======
 		return seg.HopEntry{}, nil, serrors.WrapStr("checking remote ingress interface (mtu)", err,
 			"ifid", ingress)
->>>>>>> Add unauthenticated data (EPIC hop MAC and peer MACS) to beacon
 	}
 	hopF, epicMac := s.createHopF(uint16(ingress), uint16(egress), ts, beta)
 	return seg.HopEntry{
@@ -166,13 +161,8 @@ func (s *DefaultExtender) createPeerEntry(ingress, egress common.IFIDType, ts ti
 
 	remoteInIA, remoteInIfID, remoteInMTU, err := s.remoteInfo(ingress)
 	if err != nil {
-<<<<<<< HEAD
-		return seg.PeerEntry{}, serrors.WrapStr("checking remote ingress interface", err,
-			"ingress_interface", ingress)
-=======
 		return seg.PeerEntry{}, nil, serrors.WrapStr("checking remote ingress interface", err,
 			"ifid", ingress)
->>>>>>> Add unauthenticated data (EPIC hop MAC and peer MACS) to beacon
 	}
 	hopF, epicMac := s.createHopF(uint16(ingress), uint16(egress), ts, beta)
 	return seg.PeerEntry{
