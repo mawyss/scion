@@ -119,7 +119,7 @@ func unsignedASEntryFromPB(pb *cppb.Unsigned, nr_peers int) (ASEntryUnsigned, er
 	var EpicPeerMacs [][]byte
 
 	log.Debug("Try to parse unsigned part of AS entry from PB", "peers", nr_peers)
-	
+
 	// Unsigned part must not be nil
 	if pb == nil {
 		return ASEntryUnsigned{}, serrors.New("unsigned AS entry is nil")
@@ -132,12 +132,13 @@ func unsignedASEntryFromPB(pb *cppb.Unsigned, nr_peers int) (ASEntryUnsigned, er
 		return ASEntryUnsigned{}, serrors.New("EPIC MAC (bytes) of the hop entry is nil")
 	}
 	EpicHopMac = pb.EpicHopMac.EpicMac
-	if l := len(EpicHopMac); (l != 10 && l != 0) {
+	if l := len(EpicHopMac); l != 10 && l != 0 {
 		return ASEntryUnsigned{}, serrors.New("EPIC hop entry MAC must be 0 or 10 bytes", "len", l)
 	}
 	// Validate EPIC MACs of peer entries
 	if len(pb.EpicPeerMacs) != nr_peers {
-		return ASEntryUnsigned{}, serrors.New("Not the same number of EPIC peer MACs and SCION peer MACs")
+		return ASEntryUnsigned{},
+			serrors.New("Not the same number of EPIC peer MACs and SCION peer MACs")
 	}
 	if len(pb.EpicPeerMacs) != 0 {
 		EpicPeerMacs = make([][]byte, 0, nr_peers)
@@ -152,15 +153,16 @@ func unsignedASEntryFromPB(pb *cppb.Unsigned, nr_peers int) (ASEntryUnsigned, er
 			EpicPeerMacs = append(EpicPeerMacs, empty)
 			continue
 		}
-		if l := len(peerMac.EpicMac); (l != 10 && l != 0) {
-			return ASEntryUnsigned{}, serrors.New("EPIC peer entry MAC must be 0 or 10 bytes", "len", l, "index", i)
+		if l := len(peerMac.EpicMac); l != 10 && l != 0 {
+			return ASEntryUnsigned{},
+				serrors.New("EPIC peer entry MAC must be 0 or 10 bytes", "len", l, "index", i)
 		}
 		EpicPeerMacs = append(EpicPeerMacs, peerMac.EpicMac)
 	}
 	log.Debug("Successfully parsed unsigned part of AS entry from PB")
-	
+
 	return ASEntryUnsigned{
-		EpicHopMac: EpicHopMac,
+		EpicHopMac:   EpicHopMac,
 		EpicPeerMacs: EpicPeerMacs,
 	}, nil
 }

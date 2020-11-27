@@ -370,14 +370,15 @@ func PathSegmentToPB(ps *PathSegment) *cppb.PathSegment {
 	}
 	for _, entry := range ps.ASEntries {
 		// Translate the unsigned part of the AS entry
-		unsigned := &cppb.Unsigned {
-			EpicHopMac: &cppb.EpicMac{EpicMac: entry.Unsigned.EpicHopMac},
+		unsigned := &cppb.Unsigned{
+			EpicHopMac:   &cppb.EpicMac{EpicMac: entry.Unsigned.EpicHopMac},
 			EpicPeerMacs: make([]*cppb.EpicMac, 0),
 		}
-		log.Debug("Translate EPIC hop Mac to PB", "mac", entry.Unsigned.EpicHopMac, "length", len(entry.Unsigned.EpicHopMac))
+		log.Debug("Translate EPIC hop Mac to PB", "mac", entry.Unsigned.EpicHopMac,
+			"length", len(entry.Unsigned.EpicHopMac))
 
 		for _, peer := range entry.Unsigned.EpicPeerMacs {
-			unsigned.EpicPeerMacs = append(unsigned.EpicPeerMacs,  
+			unsigned.EpicPeerMacs = append(unsigned.EpicPeerMacs,
 				&cppb.EpicMac{EpicMac: peer})
 			log.Debug("Translate EPIC peer Mac to PB", "mac", peer, "length", len(peer))
 		}

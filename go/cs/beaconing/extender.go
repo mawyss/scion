@@ -99,7 +99,7 @@ func (s *DefaultExtender) Extend(ctx context.Context, pseg *seg.PathSegment,
 
 	// Create unsigned part of the AS entry
 	unsigned := seg.ASEntryUnsigned{
-		EpicHopMac: epicHopMac,
+		EpicHopMac:   epicHopMac,
 		EpicPeerMacs: epicPeerMacs,
 	}
 
@@ -152,7 +152,7 @@ func (s *DefaultExtender) createHopEntry(ingress, egress common.IFIDType, ts tim
 	hopF, epicMac := s.createHopF(uint16(ingress), uint16(egress), ts, beta)
 	return seg.HopEntry{
 		IngressMTU: int(remoteInMTU),
-		HopField: hopF,
+		HopField:   hopF,
 	}, epicMac, nil
 }
 

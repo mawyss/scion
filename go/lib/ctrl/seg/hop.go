@@ -97,7 +97,7 @@ type HopField struct {
 	ConsIngress uint16
 	ConsEgress  uint16
 	MAC         []byte
-	HashEpicMac	[]byte
+	HashEpicMac []byte
 }
 
 func hopFieldFromPB(pb *cppb.HopField) (HopField, error) {
@@ -114,7 +114,8 @@ func hopFieldFromPB(pb *cppb.HopField) (HopField, error) {
 		return HopField{}, serrors.New("MAC must be 6 bytes", "len", len(pb.Mac))
 	}
 	if len(pb.HashEpicMac) != 16 {
-		return HopField{}, serrors.New("Hash of EPIC MAC must be 16 bytes", "len", len(pb.HashEpicMac))
+		return HopField{}, serrors.New("Hash of EPIC MAC must be 16 bytes", "len",
+			len(pb.HashEpicMac))
 	}
 	return HopField{
 		ExpTime:     uint8(pb.ExpTime),
