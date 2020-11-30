@@ -819,7 +819,7 @@ func AllocPathSegment(t *testing.T, ctrl *gomock.Controller, ifs []uint64,
 			},
 			Unsigned: seg.ASEntryUnsigned{
 				EpicHopMac:   bytes.Repeat([]byte{0xff}, 10),
-				EpicPeerMacs: [][]uint8{bytes.Repeat([]byte{0xff}, 10),},
+				EpicPeerMacs: [][]uint8{bytes.Repeat([]byte{0xff}, 10)},
 			},
 		},
 		{

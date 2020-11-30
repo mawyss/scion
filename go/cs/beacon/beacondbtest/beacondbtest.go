@@ -816,7 +816,8 @@ func AllocBeacon(t *testing.T, ctrl *gomock.Controller, ases []IfInfo, inIfId co
 			},
 		}
 		for range peers {
-			entries[i].Unsigned.EpicPeerMacs = append(entries[i].Unsigned.EpicPeerMacs, bytes.Repeat([]byte{0xff}, 10))
+			entries[i].Unsigned.EpicPeerMacs = append(entries[i].Unsigned.EpicPeerMacs,
+				bytes.Repeat([]byte{0xff}, 10))
 		}
 	}
 
