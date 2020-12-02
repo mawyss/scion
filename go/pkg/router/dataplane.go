@@ -40,6 +40,7 @@ import (
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
+	"github.com/scionproto/scion/go/lib/slayers/path/epic"
 	"github.com/scionproto/scion/go/lib/slayers/path/onehop"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
 	"github.com/scionproto/scion/go/lib/topology"
@@ -591,6 +592,8 @@ func (d *DataPlane) processPkt(ingressID uint16, rawPkt []byte, srcAddr net.Addr
 		return d.processOHP(ingressID, rawPkt, s, buffer)
 	case scion.PathType:
 		return d.processSCION(ingressID, rawPkt, s, origPacket, buffer)
+	case epic.PathType:
+		return d.processEPIC(ingressID, rawPkt, s, origPacket, buffer)
 	default:
 		return processResult{}, serrors.WithCtx(unsupportedPathType, "type", s.PathType)
 	}
@@ -662,6 +665,13 @@ func (d *DataPlane) processSCION(ingressID uint16, rawPkt []byte, s slayers.SCIO
 		buffer:     buffer,
 	}
 	return p.process()
+}
+
+func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION,
+	origPacket []byte, buffer gopacket.SerializeBuffer) (processResult, error) {
+
+	// todo
+	return processResult{}, nil
 }
 
 type scionPacketProcessor struct {

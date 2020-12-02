@@ -20,6 +20,7 @@ go_library(
         "//go/lib/slayers:go_default_library",
         "//go/lib/slayers/path:go_default_library",
         "//go/lib/slayers/path/empty:go_default_library",
+        "//go/lib/slayers/path/epic:go_default_library",
         "//go/lib/slayers/path/onehop:go_default_library",
         "//go/lib/slayers/path/scion:go_default_library",
         "//go/lib/topology:go_default_library",
