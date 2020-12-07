@@ -9,11 +9,21 @@ import (
 
 const PathType path.Type = 3
 
+func RegisterPath() {
+	path.RegisterPath(path.Metadata{
+		Type: PathType,
+		Desc: "Epic",
+		New: func() path.Path {
+			return &EpicPath{ScionRaw: &scion.Raw{}}
+		},
+	})
+}
+
 type EpicPath struct {
 	PacketTimestamp uint64
 	PHVF            []byte
 	LHVF            []byte
-	ScionPath		*scion.Raw
+	ScionRaw		*scion.Raw
 }
 
 func (p EpicPath) SerializeTo(b []byte) error {
@@ -29,9 +39,10 @@ func (p EpicPath) Reverse() (path.Path, error) {
 }
 
 func (p EpicPath) Len() int {
-	return 0
+	// todo: validate
+	return 16 + p.ScionRaw.Len()
 }
 
 func (p EpicPath) Type() path.Type {
-	return 0
+	return PathType
 }
