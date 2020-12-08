@@ -47,10 +47,10 @@ func FullMAC(h hash.Hash, info *InfoField, hf *HopField) []byte {
 	return h.Sum(nil)[:16]
 }
 
-// VerifyMAC verifies that the MAC in the hop field is correct by 
-// comparing it to the calculated expectedMac. 
-// If the expectedMac matches the value in the hop field nil is returned, 
-// otherwise an error is returned. 
+// VerifyMAC verifies that the MAC in the hop field is correct by
+// comparing it to the calculated expectedMac.
+// If the expectedMac matches the value in the hop field nil is returned,
+// otherwise an error is returned.
 func VerifyMAC(expectedMac []byte, hf *HopField) error {
 	if !bytes.Equal(hf.Mac[:6], expectedMac[:6]) {
 		return serrors.New("MAC",

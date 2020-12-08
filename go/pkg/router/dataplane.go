@@ -700,7 +700,7 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 		rawPkt:     rawPkt, // todo: check whether this needs to be modified
 		scionLayer: s,
 		origPacket: origPacket, // todo: check whether this needs to be modified
-		buffer:     buffer, // todo: check whether this needs to be modified
+		buffer:     buffer,     // todo: check whether this needs to be modified
 	}
 	result, err := p.process()
 	// todo: check validity
@@ -710,11 +710,17 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 	// todo: check validity
 
 	// Verify the PHVF and LHVF if necessary
-	if libepic.IsPenultimateHop(scionRaw) {
+	if b, err := libepic.IsPenultimateHop(scionRaw); b {
 		// todo: modify to send back scmp packet
-		libepic.VerifyHVF(auth, epicpath, false)
-	} else if libepic.IsLastHop(scionRaw) {
-		libepic.VerifyHVF(auth, epicpath, true)
+		if err != nil {
+			return processResult{}, err
+		}
+		libepic.VerifyHVF(auth, epicpath, &s, timestamp, false)
+	} else if b, err := libepic.IsLastHop(scionRaw); b {
+		if err != nil {
+			return processResult{}, err
+		}
+		libepic.VerifyHVF(auth, epicpath, &s, timestamp, true)
 	}
 
 	// todo
@@ -967,7 +973,8 @@ func (p *scionPacketProcessor) verifyCurrentMAC() (processResult, error) {
 				"seg_id", p.infoField.SegID),
 		)
 	}
-	// Add the full MAC to the SCION packet processor such that EPIC does not need to recalculate it.
+	// Add the full MAC to the SCION packet processor,
+	// such that EPIC does not need to recalculate it.
 	p.cachedMac = fullMac
 
 	return processResult{}, nil
