@@ -24,9 +24,9 @@ const (
 	ErrCipherFailure common.ErrMsg = "Unable to initialize AES cipher"
 	ErrMacFailure    common.ErrMsg = "Unable to initialize Mac"
 	// Maximal lifetime of a packet in milliseconds
-	packetLifetimeMs uint16 = 2000
+	PacketLifetimeMs uint16 = 2000
 	// Maximal clock skew in milliseconds
-	clockSkewMs uint16 = 1000
+	ClockSkewMs uint16 = 1000
 )
 
 func initEpicMac(key []byte) (hash.Hash, error) {
@@ -75,7 +75,7 @@ func inputToBytes(timestamp uint32, packetTimestamp uint64,
 	return input, nil
 }
 
-func prepareMacInput(epicpath *epic.EpicPath, s *slayers.SCION, timestamp uint32) ([]byte, error) {
+func PrepareMacInput(epicpath *epic.EpicPath, s *slayers.SCION, timestamp uint32) ([]byte, error) {
 	if epicpath == nil {
 		return nil, serrors.New("epicpath must not be nil")
 	}
@@ -113,26 +113,85 @@ func ParseEpicTimestamp(packetTimestamp uint64) (tsRel uint32, coreID uint8, cor
 	binary.BigEndian.PutUint64(b[:8], packetTimestamp)
 	tsRel = binary.BigEndian.Uint32(b[:4])
 	coreID = uint8(binary.BigEndian.Uint16(b[3:5]))
-	coreCounter = binary.BigEndian.Uint32(b[4:8]) % (1<<24)
+	coreCounter = binary.BigEndian.Uint32(b[4:8]) % (1 << 24)
 	return tsRel, coreID, coreCounter
 }
 
-func VerifyTimestamp(timestamp uint32, packetTimestamp uint64) bool {
-	// Unix time in milliseconds when the packet was timestamped by the sender
-	tsRel, _, _ := ParseEpicTimestamp(packetTimestamp)
-	tsInfoMs := uint64(timestamp) * 1000
-	tsSenderMs := tsInfoMs + ((uint64(tsRel)+1)*21)/1000
+// CreateTsRel returns the current timestamp tsRel, which is calculated relative
+// to the input timestamp (Unix time in seconds).
+func CreateTsRel(timestamp uint32) (uint32, error) {
+	tsMicro := uint64(timestamp) * 1000000
+	nowMicro := uint64(time.Now().UnixNano() / 1000)
+	var diff uint64
+	if nowMicro < tsMicro {
+		return 0, serrors.New("provided timestamp is in the future",
+			"timestamp", tsMicro, "now", nowMicro)
+	} else {
+		diff = nowMicro - tsMicro
+	}
 
-	// Current unix time in milliseconds
-	nowMs := uint64(time.Now().Unix()) * 1000
+	// Current time must be at most 1 day and 63 minutes after the timestamp
+	tsRel := max(0, (diff/21)-1)
+	if tsRel >= (1 << 32) {
+		return 0, serrors.New("current time is more than 1 day"+
+			"and 63 minutes after the timestamp",
+			"timestamp", tsMicro, "now", nowMicro)
+	}
+	return uint32(tsRel), nil
+}
+
+func max(x, y uint64) uint64 {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+func VerifyTimestamp(timestamp uint32, packetTimestamp uint64) bool {
+	// Get unix time in microseconds when the packet was timestamped by the sender
+	tsRel, _, _ := ParseEpicTimestamp(packetTimestamp)
+	tsInfoMicro := uint64(timestamp) * 1000000
+	tsSenderMicro := tsInfoMicro + ((uint64(tsRel) + 1) * 21)
+
+	// Current unix time in microseconds
+	nowMicro := uint64(time.Now().UnixNano() / 1000)
+
+	// In milliseconds
+	nowMs := nowMicro / 1000
+	tsSenderMs := tsSenderMicro / 1000
 
 	// Verification
-	if (nowMs < tsSenderMs-uint64(clockSkewMs)) ||
-		(nowMs > tsSenderMs+uint64(packetLifetimeMs)+uint64(clockSkewMs)) {
+	if (nowMs < tsSenderMs-uint64(ClockSkewMs)) ||
+		(nowMs > tsSenderMs+uint64(PacketLifetimeMs)+uint64(ClockSkewMs)) {
 		return false
 	} else {
 		return true
 	}
+}
+
+func CalculateEpicMac(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
+	timestamp uint32) ([]byte, error) {
+
+	// Initialize cryptographic MAC function
+	f, err := initEpicMac(auth)
+	if err != nil {
+		return nil, err
+	}
+	// Prepare the input for the MAC function
+	input, err := PrepareMacInput(epicpath, s, timestamp)
+	if err != nil {
+		return nil, err
+	}
+	// Calculate MAC ("Write" must not return an error: https://godoc.org/hash#Hash)
+	if _, err := f.Write(input); err != nil {
+		panic(err)
+	}
+
+	mac := f.Sum(nil)
+	if len(mac) < 4 {
+		return nil, serrors.New("calculated epic mac is too short")
+	}
+	return mac[:4], nil
 }
 
 // VerifyHVF verifies the correctness of the PHVF (if "last" is false)
@@ -140,22 +199,16 @@ func VerifyTimestamp(timestamp uint32, packetTimestamp uint64) bool {
 func VerifyHVF(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
 	timestamp uint32, last bool) bool {
 
-	// Initialize cryptographic MAC function
-	f, err := initEpicMac(auth)
+	if epicpath == nil || s == nil || len(auth) != 16 {
+		return false
+	}
+
+	// todo: check for nil, return error
+	mac, err := CalculateEpicMac(auth, epicpath, s, timestamp)
 	if err != nil {
 		return false
 	}
-	// Prepare the input for the MAC function
-	input, err := prepareMacInput(epicpath, s, timestamp)
-	if err != nil {
-		return false
-	}
-	// Calculate MAC ("Write" must not return an error: https://godoc.org/hash#Hash)
-	if _, err := f.Write(input); err != nil {
-		panic(err)
-	}
-	mac := f.Sum(nil)[:16]
-	// Check if the HVF is valid
+
 	var hvf []byte
 	if last {
 		hvf = epicpath.LHVF

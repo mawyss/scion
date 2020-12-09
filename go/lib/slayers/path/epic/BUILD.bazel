@@ -14,15 +14,11 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "epic_test.go",
-    ],
+    srcs = ["epic_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/lib/libepic:go_default_library",
-        "//go/lib/slayers/path:go_default_library",
         "//go/lib/slayers/path/scion:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )

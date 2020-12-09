@@ -681,11 +681,14 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 
 	// Get the raw SCION subheader
 	scionRaw := epicpath.ScionRaw
+	if scionRaw == nil {
+		return processResult{}, malformedPath
+	}
 
 	// Parse the current info field to get the timestamp
 	info, err := scionRaw.GetCurrentInfoField()
-	if err != nil {
-		// todo
+	if err != nil || info == nil {
+		return processResult{}, malformedPath
 	}
 
 	// Check validity of timestamp
