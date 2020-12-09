@@ -706,28 +706,45 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 		buffer:     buffer,     // todo: check whether this needs to be modified
 	}
 	result, err := p.process()
-	// todo: check validity
+	if err != nil {
+		return processResult{}, err
+	}
 
 	// Get the cached authenticator
 	auth := p.cachedMac
-	// todo: check validity
+	if len(auth) != 16 {
+		return processResult{}, serrors.New("epic authenticator has invalid length "+
+			"(expected 16 bytes)", "length", len(auth))
+	}
 
 	// Verify the PHVF and LHVF if necessary
 	if b, err := libepic.IsPenultimateHop(scionRaw); b {
-		// todo: modify to send back scmp packet
 		if err != nil {
 			return processResult{}, err
 		}
-		libepic.VerifyHVF(auth, epicpath, &s, timestamp, false)
+		ok, err := libepic.VerifyHVF(auth, epicpath, &s, timestamp, false)
+		if err != nil {
+			return processResult{}, err
+		}
+		if !ok {
+			// todo: send back scmp packet
+			return processResult{}, serrors.New("PHVF verification failed")
+		}
 	} else if b, err := libepic.IsLastHop(scionRaw); b {
 		if err != nil {
 			return processResult{}, err
 		}
-		libepic.VerifyHVF(auth, epicpath, &s, timestamp, true)
+		ok, err := libepic.VerifyHVF(auth, epicpath, &s, timestamp, true)
+		if err != nil {
+			return processResult{}, err
+		}
+		if !ok {
+			// todo: send back scmp packet
+			return processResult{}, serrors.New("LHVF verification failed")
+		}
 	}
 
-	// todo
-	return result, err
+	return result, nil
 }
 
 type scionPacketProcessor struct {

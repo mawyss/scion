@@ -197,16 +197,16 @@ func CalculateEpicMac(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
 // VerifyHVF verifies the correctness of the PHVF (if "last" is false)
 // or the LHVF (if "last" is true).
 func VerifyHVF(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
-	timestamp uint32, last bool) bool {
+	timestamp uint32, last bool) (bool, error) {
 
 	if epicpath == nil || s == nil || len(auth) != 16 {
-		return false
+		return false, serrors.New("invalid input")
 	}
 
 	// todo: check for nil, return error
 	mac, err := CalculateEpicMac(auth, epicpath, s, timestamp)
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	var hvf []byte
@@ -215,7 +215,7 @@ func VerifyHVF(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
 	} else {
 		hvf = epicpath.PHVF
 	}
-	return bytes.Equal(hvf, mac)
+	return bytes.Equal(hvf, mac), nil
 }
 
 func IsPenultimateHop(scionRaw *scion.Raw) (bool, error) {
