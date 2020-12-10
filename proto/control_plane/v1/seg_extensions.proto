@@ -23,6 +23,9 @@ message PathSegmentExtensions {
     StaticInfoExtension static_info = 1;
     // Optional hidden path extension.
     HiddenPathExtension hidden_path = 2;
+    
+    // Optinal digests of detached extensions.
+    DigestExtension digests = 1000;
 }
 
 message HiddenPathExtension {
@@ -117,4 +120,14 @@ enum LinkType {
     LINK_TYPE_MULTI_HOP = 2;
     // Connection overlayed over publicly routed Internet.
     LINK_TYPE_OPEN_NET = 3;
+}
+
+message DigestExtension {
+    message Digest {
+        // Raw digest of the metadata.
+        bytes digest = 1;
+    }
+
+    // The digest of the detached EPIC extension.
+    Digest epic = 1000;
 }
