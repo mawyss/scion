@@ -31,13 +31,13 @@ const (
 func initEpicMac(key []byte) (hash.Hash, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, common.NewBasicError(ErrCipherFailure, err)
+		return nil, serrors.Wrap(ErrCipherFailure, err)
 	}
 	// todo: CMAC is not ideal for EPIC due to its subkey generation overhead.
 	// We might want to change this in the future.
 	mac, err := cmac.New(block)
 	if err != nil {
-		return nil, common.NewBasicError(ErrMacFailure, err)
+		return nil, serrors.Wrap(ErrMacFailure, err)
 	}
 	return mac, nil
 }
