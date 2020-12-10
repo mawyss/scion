@@ -658,20 +658,19 @@ func (d *DataPlane) processSCION(ingressID uint16, rawPkt []byte, s slayers.SCIO
 	origPacket []byte, buffer gopacket.SerializeBuffer) (processResult, error) {
 
 	p := scionPacketProcessor{
-		d:          d,
-		ingressID:  ingressID,
-		rawPkt:     rawPkt,
-		scionLayer: s,
-		origPacket: origPacket,
-		buffer:     buffer,
+		d:           d,
+		ingressID:   ingressID,
+		rawPkt:      rawPkt,
+		scionLayer:  s,
+		origPacket:  origPacket,
+		buffer:      buffer,
+		isSubheader: false,
 	}
 	return p.process()
 }
 
 func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION,
 	origPacket []byte, buffer gopacket.SerializeBuffer) (processResult, error) {
-
-	// todo: add documentation
 
 	// Get the already parsed EPIC path header
 	epicpath, ok := s.Path.(*epic.EpicPath)
@@ -698,12 +697,13 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 
 	// Process the SCION subheader
 	p := scionPacketProcessor{
-		d:          d,
-		ingressID:  ingressID,
-		rawPkt:     rawPkt, // todo: check whether this needs to be modified
-		scionLayer: s,
-		origPacket: origPacket, // todo: check whether this needs to be modified
-		buffer:     buffer,     // todo: check whether this needs to be modified
+		d:           d,
+		ingressID:   ingressID,
+		rawPkt:      rawPkt,
+		scionLayer:  s,
+		origPacket:  origPacket,
+		buffer:      buffer,
+		isSubheader: true,
 	}
 	result, err := p.process()
 	if err != nil {
@@ -727,7 +727,7 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 			return processResult{}, err
 		}
 		if !ok {
-			// todo: send back scmp packet
+			// todo: send back scmp packet?
 			return processResult{}, serrors.New("PHVF verification failed")
 		}
 	} else if b, err := libepic.IsLastHop(scionRaw); b {
@@ -739,11 +739,12 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 			return processResult{}, err
 		}
 		if !ok {
-			// todo: send back scmp packet
+			// todo: send back scmp packet?
 			return processResult{}, serrors.New("LHVF verification failed")
 		}
 	}
 
+	// Return the result of the SCION packet processor
 	return result, nil
 }
 
@@ -762,6 +763,8 @@ type scionPacketProcessor struct {
 	origPacket []byte
 	// buffer is the buffer that can be used to serialize gopacket layers.
 	buffer gopacket.SerializeBuffer
+	// isSubheader indicates whether the scion path is part of an epic-hp path.
+	isSubheader bool
 
 	// path is the raw SCION path. Will be set during processing.
 	path *scion.Raw
@@ -845,11 +848,19 @@ func (p *scionPacketProcessor) packSCMP(scmpH *slayers.SCMP, scmpP gopacket.Seri
 }
 
 func (p *scionPacketProcessor) parsePath() (processResult, error) {
-	var ok bool
-	p.path, ok = p.scionLayer.Path.(*scion.Raw)
-	if !ok {
-		// TODO(lukedirtwalker) parameter problem invalid path?
-		return processResult{}, malformedPath
+	if p.isSubheader {
+		epicpath, ok := p.scionLayer.Path.(*epic.EpicPath)
+		if !ok {
+			return processResult{}, malformedPath
+		}
+		p.path = epicpath.ScionRaw
+	} else {
+		var ok bool
+		p.path, ok = p.scionLayer.Path.(*scion.Raw)
+		if !ok {
+			// TODO(lukedirtwalker) parameter problem invalid path?
+			return processResult{}, malformedPath
+		}
 	}
 	var err error
 	p.hopField, err = p.path.GetCurrentHopField()

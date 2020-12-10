@@ -28,6 +28,9 @@ type EpicPath struct {
 }
 
 func (p *EpicPath) SerializeTo(b []byte) error {
+	if p == nil {
+		return serrors.New("epic path must not be nil")
+	}
 	if len(b) < 16 {
 		return serrors.New("buffer for EpicPath too short (< 16 bytes)")
 	}
@@ -45,6 +48,9 @@ func (p *EpicPath) SerializeTo(b []byte) error {
 }
 
 func (p *EpicPath) DecodeFromBytes(b []byte) error {
+	if p == nil {
+		return serrors.New("epic path must not be nil")
+	}
 	if len(b) < 16 {
 		return serrors.New("EpicPath bytes too short (< 16 bytes)")
 	}
@@ -58,6 +64,12 @@ func (p *EpicPath) DecodeFromBytes(b []byte) error {
 }
 
 func (p *EpicPath) Reverse() (path.Path, error) {
+	if p == nil {
+		return nil, serrors.New("epic path must not be nil")
+	}
+	if p.ScionRaw == nil {
+		return nil, serrors.New("scion subpath must not be nil")
+	}
 	revScion, err := p.ScionRaw.Reverse()
 	if err != nil {
 		return nil, err
@@ -71,6 +83,9 @@ func (p *EpicPath) Reverse() (path.Path, error) {
 }
 
 func (p *EpicPath) Len() int {
+	if p == nil {
+		return 0
+	}
 	if p.ScionRaw == nil {
 		return 16
 	}

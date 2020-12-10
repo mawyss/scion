@@ -12,7 +12,6 @@ import (
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
-	//"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path/epic"
@@ -34,7 +33,7 @@ func initEpicMac(key []byte) (hash.Hash, error) {
 	if err != nil {
 		return nil, common.NewBasicError(ErrCipherFailure, err)
 	}
-	// CMAC is not ideal for EPIC due to its subkey generation overhead.
+	// todo: CMAC is not ideal for EPIC due to its subkey generation overhead.
 	// We might want to change this in the future.
 	mac, err := cmac.New(block)
 	if err != nil {
@@ -57,7 +56,8 @@ func inputToBytes(timestamp uint32, packetTimestamp uint64,
 	l := int((srcAddrLen + 1) * 4)
 	if srcAddrLen > 3 || l != len(srcAddr) {
 		return nil, serrors.New("srcAddrLen must be between 0 and 3, and encode the "+
-			"srcAddr length", "srcAddrLen", srcAddrLen, "len(srcAddr)", len(srcAddr))
+			"srcAddr length", "srcAddrLen", srcAddrLen, "len(srcAddr)", len(srcAddr),
+			"l", l)
 	}
 
 	// Create a multiple of 16 such that the input fits in
@@ -90,8 +90,6 @@ func PrepareMacInput(epicpath *epic.EpicPath, s *slayers.SCION, timestamp uint32
 	return inputToBytes(timestamp, packetTimestamp, srcIA, srcAddr, srcAddrLen, payloadLen)
 }
 
-// todo: add function to create epic timestamp from PckId
-
 // 0                   1                   2                   3
 // 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 // +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -104,6 +102,21 @@ func CreateEpicTimestamp(tsRel uint32, coreID uint8, coreCounter uint32) (packet
 	binary.BigEndian.PutUint32(b[4:8], coreCounter)
 	binary.BigEndian.PutUint16(b[3:5], uint16(coreID))
 	binary.BigEndian.PutUint32(b[:4], tsRel)
+	packetTimestamp = binary.BigEndian.Uint64(b[:8])
+	return
+}
+
+// 0                   1                   2                   3
+// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                             TsRel                             |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+// |                             PckId                             |
+// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+func CreateEpicTimestampCustom(tsRel uint32, pckId uint32) (packetTimestamp uint64) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint32(b[:4], tsRel)
+	binary.BigEndian.PutUint32(b[4:8], pckId)
 	packetTimestamp = binary.BigEndian.Uint64(b[:8])
 	return
 }
@@ -203,7 +216,6 @@ func VerifyHVF(auth []byte, epicpath *epic.EpicPath, s *slayers.SCION,
 		return false, serrors.New("invalid input")
 	}
 
-	// todo: check for nil, return error
 	mac, err := CalculateEpicMac(auth, epicpath, s, timestamp)
 	if err != nil {
 		return false, err
