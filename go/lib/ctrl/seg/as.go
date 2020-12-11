@@ -73,8 +73,6 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 		return ASEntry{}, serrors.WrapStr("parsing hop entry", err)
 	}
 
-	log.Debug("todo")
-
 	var peerEntries []PeerEntry
 	if len(entry.PeerEntries) != 0 {
 		peerEntries = make([]PeerEntry, 0, len(entry.PeerEntries))
@@ -92,13 +90,20 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 
 	extensions := extensionsFromPB(entry.Extensions)
 
+	if pb.Unsigned == nil {
+		serrors.New("unsigned part missing")
+	}
+	unsignedExtensions := unsigned_extensions.UnsignedExtensionsFromPB(pb.Unsigned)
+	log.Debug("todo")
+
 	return ASEntry{
-		HopEntry:    hopEntry,
-		PeerEntries: peerEntries,
-		Local:       addr.IAInt(entry.IsdAs).IA(),
-		Next:        addr.IAInt(entry.NextIsdAs).IA(), // Can contain wildcard.
-		MTU:         int(entry.Mtu),
-		Extensions:  extensions,
-		Signed:      pb.Signed,
+		HopEntry:           hopEntry,
+		PeerEntries:        peerEntries,
+		Local:              addr.IAInt(entry.IsdAs).IA(),
+		Next:               addr.IAInt(entry.NextIsdAs).IA(), // Can contain wildcard.
+		MTU:                int(entry.Mtu),
+		Extensions:         extensions,
+		Signed:             pb.Signed,
+		UnsignedExtensions: unsignedExtensions,
 	}, nil
 }

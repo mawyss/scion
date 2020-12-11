@@ -5,5 +5,5 @@ go_library(
     srcs = ["epic_detached.go"],
     importpath = "github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions/epic_detached",
     visibility = ["//visibility:public"],
-    deps = [],
+    deps = ["//go/pkg/proto/control_plane/experimental:go_default_library"],
 )

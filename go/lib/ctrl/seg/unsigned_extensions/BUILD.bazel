@@ -7,5 +7,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/lib/ctrl/seg/unsigned_extensions/epic_detached:go_default_library",
+        "//go/pkg/proto/control_plane:go_default_library",
     ],
 )

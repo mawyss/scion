@@ -14,6 +14,10 @@
 
 package epic_detached
 
+import (
+	"github.com/scionproto/scion/go/pkg/proto/control_plane/experimental"
+)
+
 type Auth []byte
 
 const AuthLen = 10
@@ -22,5 +26,38 @@ type EpicDetached struct {
 	// The remaining 10 bytes of the hop entry MAC
 	AuthHopEntry []byte
 	// The remaining 10 bytes of the peer entry MACs
-	AuthPeerEntries []byte
+	AuthPeerEntries [][]byte
+}
+
+// EpicDetachedFromPB returns the go-representation of the detached Epic extension.
+// All the authenticators must be of length AuthLen, otherwise no authenticator
+// will be parsed at all.
+func EpicDetachedFromPB(ext *experimental.EPICDetachedExtension) *EpicDetached {
+	if ext == nil {
+		return nil
+	}
+	if ext.AuthHopEntry == nil || len(ext.AuthHopEntry) != AuthLen {
+		return nil
+	}
+	hop := make([]byte, 10)
+	copy(hop, ext.AuthHopEntry)
+
+	peers := make([][]byte, len(ext.AuthPeerEntries))
+	for _, p := range ext.AuthPeerEntries {
+		if p == nil || len(p) != AuthLen {
+			return nil
+		}
+		peer := make([]byte, AuthLen)
+		copy(peer, p)
+		peers = append(peers, peer)
+	}
+
+	return &EpicDetached{
+		AuthHopEntry:    hop,
+		AuthPeerEntries: peers,
+	}
+}
+
+func EpicDetachedExtensionToPB(*EpicDetached) *experimental.EPICDetachedExtension {
+	return nil
 }

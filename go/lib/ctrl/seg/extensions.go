@@ -35,9 +35,11 @@ func extensionsFromPB(pb *cppb.PathSegmentExtensions) Extensions {
 		IsHidden: pb.HiddenPath != nil && pb.HiddenPath.IsHidden,
 	}
 	staticInfo := staticinfo.FromPB(pb.StaticInfo)
+	digest := digest.DigestExtensionFromPB(pb.Digests)
 	return Extensions{
 		HiddenPath: hiddenPath,
 		StaticInfo: staticInfo,
+		Digests:    digest,
 	}
 }
 
@@ -47,11 +49,13 @@ func extensionsToPB(ext Extensions) *cppb.PathSegmentExtensions {
 		hiddenPath = &cppb.HiddenPathExtension{IsHidden: true}
 	}
 	staticInfo := staticinfo.ToPB(ext.StaticInfo)
+	digest := digest.DigestExtensionToPB(ext.Digests)
 
-	if hiddenPath != nil || staticInfo != nil {
+	if hiddenPath != nil || staticInfo != nil || digest != nil {
 		return &cppb.PathSegmentExtensions{
 			HiddenPath: hiddenPath,
 			StaticInfo: staticInfo,
+			Digests:    digest,
 		}
 	}
 	return nil
