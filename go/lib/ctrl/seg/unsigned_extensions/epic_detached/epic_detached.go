@@ -1,10 +1,10 @@
-// Copyright 2020 Anapaya Systems
+// Copyright 2020 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+package epic_detached
 
-option go_package = "github.com/scionproto/scion/go/pkg/proto/control_plane/experimental";
+type Auth []byte
 
-package proto.control_plane.experimental.v1;
+const AuthLen = 10
 
-message EPICDetachedExtension {
-    // Remaining bytes of the full MAC in the hop entry.
-    bytes auth_hop_entry = 1;
-    // Remaining bytes of the full MAC in the peer entries.
-    repeated bytes auth_peer_entries = 2;
+type EpicDetached struct {
+	// The remaining 10 bytes of the hop entry MAC
+	AuthHopEntry []byte
+	// The remaining 10 bytes of the peer entry MACs
+	AuthPeerEntries []byte
 }

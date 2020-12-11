@@ -22,6 +22,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/scionproto/scion/go/lib/addr"
+	"github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions"
+	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/scrypto/signed"
 	"github.com/scionproto/scion/go/lib/serrors"
 	cppb "github.com/scionproto/scion/go/pkg/proto/control_plane"
@@ -43,6 +45,8 @@ type ASEntry struct {
 	MTU int
 	// Extensions holds all the beaconing extensions.
 	Extensions Extensions
+	// UnsignedExtensions holds all the unsigned beaconing extensions.
+	UnsignedExtensions unsigned_extensions.UnsignedExtensions
 }
 
 // ASEntryFromPB creates an AS entry from the protobuf representation.
@@ -68,6 +72,8 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 	if err != nil {
 		return ASEntry{}, serrors.WrapStr("parsing hop entry", err)
 	}
+
+	log.Debug("todo")
 
 	var peerEntries []PeerEntry
 	if len(entry.PeerEntries) != 0 {

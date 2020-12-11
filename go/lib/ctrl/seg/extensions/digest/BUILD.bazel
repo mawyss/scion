@@ -1,0 +1,10 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["digest.go"],
+    importpath = "github.com/scionproto/scion/go/lib/ctrl/seg/extensions/digest",
+    visibility = ["//visibility:public"],
+    deps = [],
+)
+

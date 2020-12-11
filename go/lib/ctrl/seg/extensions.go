@@ -15,6 +15,7 @@
 package seg
 
 import (
+	"github.com/scionproto/scion/go/lib/ctrl/seg/extensions/digest"
 	"github.com/scionproto/scion/go/lib/ctrl/seg/extensions/staticinfo"
 	cppb "github.com/scionproto/scion/go/pkg/proto/control_plane"
 )
@@ -22,6 +23,7 @@ import (
 type Extensions struct {
 	HiddenPath HiddenPathExtension
 	StaticInfo *staticinfo.Extension
+	Digests    *digest.DigestExtension
 }
 
 func extensionsFromPB(pb *cppb.PathSegmentExtensions) Extensions {
