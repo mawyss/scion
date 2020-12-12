@@ -58,6 +58,31 @@ func EpicDetachedFromPB(ext *experimental.EPICDetachedExtension) *EpicDetached {
 	}
 }
 
-func EpicDetachedExtensionToPB(*EpicDetached) *experimental.EPICDetachedExtension {
-	return nil
+// EpicDetachedFromPB returns the protobuf representation of the detached Epic extension.
+// All the authenticators must be of length AuthLen, otherwise no authenticator will be
+// parsed at all.
+func EpicDetachedToPB(ed *EpicDetached) *experimental.EPICDetachedExtension {
+	if ed == nil {
+		return nil
+	}
+	if ed.AuthHopEntry == nil || len(ed.AuthHopEntry) != AuthLen {
+		return nil
+	}
+	hop := make([]byte, 10)
+	copy(hop, ed.AuthHopEntry)
+
+	peers := make([][]byte, len(ed.AuthPeerEntries))
+	for _, p := range ed.AuthPeerEntries {
+		if p == nil || len(p) != AuthLen {
+			return nil
+		}
+		peer := make([]byte, AuthLen)
+		copy(peer, p)
+		peers = append(peers, peer)
+	}
+
+	return &experimental.EPICDetachedExtension{
+		AuthHopEntry:    hop,
+		AuthPeerEntries: peers,
+	}
 }

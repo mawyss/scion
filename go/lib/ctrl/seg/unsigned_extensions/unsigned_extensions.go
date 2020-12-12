@@ -41,6 +41,6 @@ func UnsignedExtensionsToPB(ue UnsignedExtensions) *cppb.PathSegmentUnsignedExte
 		return &cppb.PathSegmentUnsignedExtensions{}
 	}
 	return &cppb.PathSegmentUnsignedExtensions{
-		EpicDetachedExtension: epic_detached.EpicDetachedExtensionToPB(ue.EpicDetached),
+		EpicDetachedExtension: epic_detached.EpicDetachedToPB(ue.EpicDetached),
 	}
 }
