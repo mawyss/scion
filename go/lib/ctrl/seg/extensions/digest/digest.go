@@ -102,9 +102,11 @@ func CalcEpicDigest(ed *epic_detached.EpicDetached, checking bool) ([]byte, erro
 	h := sha256.New()
 	h.Write(totalLenAsBytes)
 	log.Debug("epic digest", "checking", checking, "totallen", totalLen)
-	log.Debug("epic digest", "checking", checking, "totallenbytes", hex.EncodeToString(totalLenAsBytes))
+	log.Debug("epic digest", "checking", checking, "totallenbytes",
+		hex.EncodeToString(totalLenAsBytes))
 	h.Write(ed.AuthHopEntry)
-	log.Debug("epic digest", "checking", checking, "authHopEntry", hex.EncodeToString(ed.AuthHopEntry))
+	log.Debug("epic digest", "checking", checking, "authHopEntry",
+		hex.EncodeToString(ed.AuthHopEntry))
 
 	for _, peer := range ed.AuthPeerEntries {
 		if len(peer) != epic_detached.AuthLen {
@@ -115,7 +117,6 @@ func CalcEpicDigest(ed *epic_detached.EpicDetached, checking bool) ([]byte, erro
 		log.Debug("epic digest", "checking", checking, "AuthPeerEntry", hex.EncodeToString(peer))
 	}
 
-	
 	log.Debug("epic digest", "digest", hex.EncodeToString(h.Sum(nil)[0:EpicDigestLength]))
 	return h.Sum(nil)[0:EpicDigestLength], nil
 }

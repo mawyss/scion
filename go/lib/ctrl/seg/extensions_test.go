@@ -46,4 +46,3 @@ func TestDecodeEncodeEpicDigest(t *testing.T) {
 		assert.Equal(t, ext, ext2)
 	}
 }
-

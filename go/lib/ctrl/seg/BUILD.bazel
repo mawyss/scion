@@ -32,7 +32,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
-	    "extensions_test.go",
+        "extensions_test.go",
         "seg_test.go",
         "segs_test.go",
     ],

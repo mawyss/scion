@@ -18,9 +18,7 @@ go_test(
     srcs = ["digest_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//go/lib/xtest:go_default_library",
+        "//go/lib/ctrl/seg/unsigned_extensions/epic_detached:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
     ],
 )
-

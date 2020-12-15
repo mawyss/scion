@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	
+
 	"github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions"
 	"github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions/epic_detached"
 )
@@ -34,12 +34,12 @@ func TestDecodeEncode(t *testing.T) {
 			AuthHopEntry:    hop,
 			AuthPeerEntries: peers,
 		}
-		
+
 		ue := unsigned_extensions.UnsignedExtensions{
 			EpicDetached: ed,
 		}
-		ue2 := unsigned_extensions.UnsignedExtensionsFromPB(unsigned_extensions.UnsignedExtensionsToPB(ue))
+		ue2 := unsigned_extensions.UnsignedExtensionsFromPB(
+			unsigned_extensions.UnsignedExtensionsToPB(ue))
 		assert.Equal(t, ue, ue2)
 	}
 }
-

@@ -132,7 +132,8 @@ func checkUnsignedExtensions(ue *unsigned_extensions.UnsignedExtensions, e *Exte
 		}
 		if !bytes.Equal(epicDigest, e.Digests.Epic) {
 			return serrors.New("epic authenticators and their hash are not consistent",
-				"calculated", hex.EncodeToString(epicDigest), "beacon:", hex.EncodeToString(e.Digests.Epic))
+				"calculated", hex.EncodeToString(epicDigest), "beacon:",
+				hex.EncodeToString(e.Digests.Epic))
 		}
 	}
 
