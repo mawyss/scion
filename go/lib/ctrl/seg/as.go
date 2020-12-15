@@ -17,13 +17,15 @@
 package seg
 
 import (
+	"bytes"
+	"encoding/hex"
 	"math"
 
 	"google.golang.org/protobuf/proto"
 
 	"github.com/scionproto/scion/go/lib/addr"
+	"github.com/scionproto/scion/go/lib/ctrl/seg/extensions/digest"
 	"github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions"
-	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/scrypto/signed"
 	"github.com/scionproto/scion/go/lib/serrors"
 	cppb "github.com/scionproto/scion/go/pkg/proto/control_plane"
@@ -88,13 +90,12 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 		peerEntries = append(peerEntries, peerEntry)
 	}
 
-	extensions := extensionsFromPB(entry.Extensions)
-
-	if pb.Unsigned == nil {
-		serrors.New("unsigned part missing")
-	}
+	extensions := ExtensionsFromPB(entry.Extensions)
 	unsignedExtensions := unsigned_extensions.UnsignedExtensionsFromPB(pb.Unsigned)
-	log.Debug("todo")
+	//err = checkUnsignedExtensions(&unsignedExtensions, &extensions)
+	//if err != nil {
+	//	return ASEntry{}, err
+	//}
 
 	return ASEntry{
 		HopEntry:           hopEntry,
@@ -106,4 +107,34 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 		Signed:             pb.Signed,
 		UnsignedExtensions: unsignedExtensions,
 	}, nil
+}
+
+// checkUnsignedExtensions checks whether the unsigned extensions are consistent with the
+// signed hash. Furthermore, an unsigned extension is not valid if it is present in the
+// ASEntry, but the corresponding hash is not.
+func checkUnsignedExtensions(ue *unsigned_extensions.UnsignedExtensions, e *Extensions) error {
+	if ue == nil || e == nil {
+		return serrors.New("invalid input to checkUnsignedExtensions")
+	}
+
+	// Unsigned extension present but hash is not: error
+	epicDetached := (ue.EpicDetached != nil)
+	epicDigest := (e.Digests != nil && len(e.Digests.Epic) != 0)
+	if epicDetached && !epicDigest {
+		return serrors.New("epic authenticators present, but hash is not")
+	}
+
+	// Check consistency
+	if epicDetached && epicDigest {
+		epicDigest, err := digest.CalcEpicDigest(ue.EpicDetached, true)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(epicDigest, e.Digests.Epic) {
+			return serrors.New("epic authenticators and their hash are not consistent",
+				"calculated", hex.EncodeToString(epicDigest), "beacon:", hex.EncodeToString(e.Digests.Epic))
+		}
+	}
+
+	return nil
 }

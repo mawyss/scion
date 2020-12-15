@@ -17,9 +17,11 @@ package digest
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"math/rand"
 
 	"github.com/scionproto/scion/go/lib/ctrl/seg/unsigned_extensions/epic_detached"
+	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/serrors"
 	cppb "github.com/scionproto/scion/go/pkg/proto/control_plane"
 )
@@ -33,30 +35,36 @@ type DigestExtension struct {
 	Epic Digest
 }
 
-// DigestExtensionFromPB returns to go-representation of the
+// DigestExtensionFromPB returns the go-representation of the
 // protobuf DigestExtension. If the protobuf DigestExtension
 // exists (!= nil), then also the Epic digest must be present.
 func DigestExtensionFromPB(d *cppb.DigestExtension) *DigestExtension {
 	if d == nil {
+		log.Debug("EPIC: NIL (d)")
 		return nil
 	}
 	if d.Epic == nil {
+		log.Debug("EPIC: NIL (d.Epic)")
 		return nil
 	}
 	if len(d.Epic.Digest) != EpicDigestLength {
+		log.Debug("EPIC: NIL (len)")
 		return nil
 	}
+	e := make([]byte, EpicDigestLength)
+	copy(e, d.Epic.Digest)
 	return &DigestExtension{
-		Epic: d.Epic.Digest,
+		Epic: e,
 	}
 }
 
-// DigestExtensionFromPB returns to protobuf-representation of the
+// DigestExtensionFromPB returns the protobuf-representation of the
 // go DigestExtension. If a digest is missing, the function will
 // add random bytes so that it is not possible to distinguish
 // later whether the extension was removed or never added at all.
 func DigestExtensionToPB(d *DigestExtension) *cppb.DigestExtension {
 	if d == nil {
+		log.Debug("EPIC: WROTE RANDOM BYTES")
 		return &cppb.DigestExtension{
 			Epic: &cppb.DigestExtension_Digest{
 				Digest: randBytes(EpicDigestLength),
@@ -64,6 +72,7 @@ func DigestExtensionToPB(d *DigestExtension) *cppb.DigestExtension {
 		}
 	}
 	if len(d.Epic) != EpicDigestLength {
+		log.Debug("EPIC: WROTE RANDOM BYTES")
 		return &cppb.DigestExtension{
 			Epic: &cppb.DigestExtension_Digest{
 				Digest: randBytes(EpicDigestLength),
@@ -79,11 +88,11 @@ func DigestExtensionToPB(d *DigestExtension) *cppb.DigestExtension {
 	}
 }
 
-func CalcEpicDigest(ed *epic_detached.EpicDetached) ([]byte, error) {
+func CalcEpicDigest(ed *epic_detached.EpicDetached, checking bool) ([]byte, error) {
 	if ed == nil {
 		return nil, serrors.New("input to CalcEpicDigest must not be nil")
 	}
-	if len(ed.AuthHopEntry) != EpicDigestLength {
+	if len(ed.AuthHopEntry) != epic_detached.AuthLen {
 		return nil, serrors.New("authenticator for hop entry has wrong length",
 			"len(ed.AuthHopEntry)", len(ed.AuthHopEntry))
 	}
@@ -92,23 +101,23 @@ func CalcEpicDigest(ed *epic_detached.EpicDetached) ([]byte, error) {
 	binary.BigEndian.PutUint64(totalLenAsBytes, uint64(totalLen))
 	h := sha256.New()
 	h.Write(totalLenAsBytes)
+	log.Debug("epic digest", "checking", checking, "totallen", totalLen)
+	log.Debug("epic digest", "checking", checking, "totallenbytes", hex.EncodeToString(totalLenAsBytes))
 	h.Write(ed.AuthHopEntry)
+	log.Debug("epic digest", "checking", checking, "authHopEntry", hex.EncodeToString(ed.AuthHopEntry))
 
 	for _, peer := range ed.AuthPeerEntries {
-		if len(peer) != EpicDigestLength {
+		if len(peer) != epic_detached.AuthLen {
 			return nil, serrors.New("authenticator for peer entry has wrong length",
 				"len(peer)", len(peer))
 		}
 		h.Write(peer)
+		log.Debug("epic digest", "checking", checking, "AuthPeerEntry", hex.EncodeToString(peer))
 	}
-	return h.Sum(nil), nil
-}
 
-type EpicDetached struct {
-	// The remaining 10 bytes of the hop entry MAC
-	AuthHopEntry []byte
-	// The remaining 10 bytes of the peer entry MACs
-	AuthPeerEntries [][]byte
+	
+	log.Debug("epic digest", "digest", hex.EncodeToString(h.Sum(nil)[0:EpicDigestLength]))
+	return h.Sum(nil)[0:EpicDigestLength], nil
 }
 
 func randBytes(l uint16) []byte {

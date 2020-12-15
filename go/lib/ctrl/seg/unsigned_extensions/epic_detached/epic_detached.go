@@ -42,7 +42,7 @@ func EpicDetachedFromPB(ext *experimental.EPICDetachedExtension) *EpicDetached {
 	hop := make([]byte, 10)
 	copy(hop, ext.AuthHopEntry)
 
-	peers := make([][]byte, len(ext.AuthPeerEntries))
+	peers := make([][]byte, 0, len(ext.AuthPeerEntries))
 	for _, p := range ext.AuthPeerEntries {
 		if p == nil || len(p) != AuthLen {
 			return nil
@@ -71,7 +71,7 @@ func EpicDetachedToPB(ed *EpicDetached) *experimental.EPICDetachedExtension {
 	hop := make([]byte, 10)
 	copy(hop, ed.AuthHopEntry)
 
-	peers := make([][]byte, len(ed.AuthPeerEntries))
+	peers := make([][]byte, 0, len(ed.AuthPeerEntries))
 	for _, p := range ed.AuthPeerEntries {
 		if p == nil || len(p) != AuthLen {
 			return nil
