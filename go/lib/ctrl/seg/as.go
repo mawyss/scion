@@ -117,14 +117,16 @@ func checkUnsignedExtensions(ue *unsigned_extensions.UnsignedExtensions, e *Exte
 		return serrors.New("invalid input to checkUnsignedExtensions")
 	}
 
-	// Unsigned extension present but hash is not: error
+	// If unsigned extension is present but hash is not, return error
+	// EPIC:
 	epicDetached := (ue.EpicDetached != nil)
 	epicDigest := (e.Digests != nil && len(e.Digests.Epic) != 0)
 	if epicDetached && !epicDigest {
 		return serrors.New("epic authenticators present, but hash is not")
 	}
 
-	// Check consistency
+	// Check consistency (digest extension contains correct hash)
+	// EPIC:
 	if epicDetached && epicDigest {
 		epicDigest, err := digest.CalcEpicDigest(ue.EpicDetached)
 		if err != nil {
@@ -136,6 +138,5 @@ func checkUnsignedExtensions(ue *unsigned_extensions.UnsignedExtensions, e *Exte
 				hex.EncodeToString(e.Digests.Epic))
 		}
 	}
-
 	return nil
 }

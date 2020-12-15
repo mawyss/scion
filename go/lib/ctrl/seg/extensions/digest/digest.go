@@ -29,13 +29,10 @@ type Digest []byte
 const EpicDigestLength = 16
 
 type DigestExtension struct {
-	// The digest of the EpicDetachedExtension
+	// Epic dentoes the digest of the EpicDetachedExtension
 	Epic Digest
 }
 
-// DigestExtensionFromPB returns the go-representation of the
-// protobuf DigestExtension. If the protobuf DigestExtension
-// exists (!= nil), then also the Epic digest must be present.
 func DigestExtensionFromPB(d *cppb.DigestExtension) *DigestExtension {
 	if d == nil {
 		return nil
@@ -58,8 +55,6 @@ func DigestExtensionFromPB(d *cppb.DigestExtension) *DigestExtension {
 	}
 }
 
-// DigestExtensionFromPB returns the protobuf-representation of the
-// go DigestExtension.
 func DigestExtensionToPB(d *DigestExtension) *cppb.DigestExtension {
 	if d == nil {
 		return nil

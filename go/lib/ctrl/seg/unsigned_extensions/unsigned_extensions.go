@@ -21,7 +21,7 @@ import (
 
 type UnsignedExtensions struct {
 	// EpicDetached contains the detachable epic authenticators. It is nil
-	// if it was detached.
+	// if it was detached (or never added).
 	EpicDetached *epic_detached.EpicDetached
 }
 
