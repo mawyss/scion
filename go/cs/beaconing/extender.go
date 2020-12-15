@@ -114,7 +114,7 @@ func (s *DefaultExtender) Extend(ctx context.Context, pseg *seg.PathSegment,
 		AuthPeerEntries: epicPeerMacs,
 	}
 	asEntry.UnsignedExtensions.EpicDetached = epicDetachedExtension
-	epicHash, err := digest.CalcEpicDigest(epicDetachedExtension, false)
+	epicHash, err := digest.CalcEpicDigest(epicDetachedExtension)
 	if err != nil {
 		return err
 	}

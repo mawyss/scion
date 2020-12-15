@@ -34,7 +34,7 @@ func TestDecodeEncode(t *testing.T) {
 			AuthHopEntry:    hop,
 			AuthPeerEntries: peers,
 		}
-		hash, err := digest.CalcEpicDigest(ed, true)
+		hash, err := digest.CalcEpicDigest(ed)
 		assert.NoError(t, err)
 		dig := &digest.DigestExtension{
 			Epic: hash,

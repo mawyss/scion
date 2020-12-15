@@ -92,10 +92,10 @@ func ASEntryFromPB(pb *cppb.ASEntry) (ASEntry, error) {
 
 	extensions := ExtensionsFromPB(entry.Extensions)
 	unsignedExtensions := unsigned_extensions.UnsignedExtensionsFromPB(pb.Unsigned)
-	//err = checkUnsignedExtensions(&unsignedExtensions, &extensions)
-	//if err != nil {
-	//	return ASEntry{}, err
-	//}
+	err = checkUnsignedExtensions(&unsignedExtensions, &extensions)
+	if err != nil {
+		return ASEntry{}, err
+	}
 
 	return ASEntry{
 		HopEntry:           hopEntry,
@@ -126,7 +126,7 @@ func checkUnsignedExtensions(ue *unsigned_extensions.UnsignedExtensions, e *Exte
 
 	// Check consistency
 	if epicDetached && epicDigest {
-		epicDigest, err := digest.CalcEpicDigest(ue.EpicDetached, true)
+		epicDigest, err := digest.CalcEpicDigest(ue.EpicDetached)
 		if err != nil {
 			return err
 		}
