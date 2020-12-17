@@ -29,7 +29,7 @@ func RegisterPath() {
 		Type: PathType,
 		Desc: "Colibri",
 		New: func() path.Path {
-			return &ColibriPath {
+			return &ColibriPath{
 				InfoField: &InfoField{},
 			}
 		},
@@ -40,9 +40,9 @@ type ColibriPath struct {
 	// PacketTimestamp denotes the high-precision timestamp.
 	PacketTimestamp uint64
 	// InfoField denotes the COLIBRI info field.
-	InfoField       *InfoField
+	InfoField *InfoField
 	// HopFields denote the COLIBRI hop fields.
-	HopFields       []*HopField
+	HopFields []*HopField
 }
 
 func (c *ColibriPath) DecodeFromBytes(b []byte) error {
@@ -59,11 +59,11 @@ func (c *ColibriPath) DecodeFromBytes(b []byte) error {
 		c.InfoField = &InfoField{}
 	}
 	nrHopFields := int(c.InfoField.HFCount)
-	if 8 + LenInfoField + nrHopFields*LenHopField > len(b) {
+	if 8+LenInfoField+nrHopFields*LenHopField > len(b) {
 		return serrors.New("raw colibri path is smaller than what is " +
 			"indicated by HFCount in the info field")
 	}
-	if err := c.InfoField.DecodeFromBytes(b[8:8+LenInfoField]); err != nil {
+	if err := c.InfoField.DecodeFromBytes(b[8 : 8+LenInfoField]); err != nil {
 		return err
 	}
 	c.HopFields = make([]*HopField, nrHopFields)
@@ -94,7 +94,7 @@ func (c *ColibriPath) SerializeTo(b []byte) error {
 	}
 
 	binary.BigEndian.PutUint64(b[0:8], c.PacketTimestamp)
-	if err := c.InfoField.SerializeTo(b[8:8+LenInfoField]); err != nil {
+	if err := c.InfoField.SerializeTo(b[8 : 8+LenInfoField]); err != nil {
 		return err
 	}
 	for i, hf := range c.HopFields {
