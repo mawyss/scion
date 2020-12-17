@@ -22,8 +22,6 @@ import (
 )
 
 const PathType path.Type = 4
-const LenInfoField int = 24
-const LenHopField int = 8
 const LenMinColibri int = 8 + LenInfoField + 2*LenHopField
 
 func RegisterPath() {
@@ -45,54 +43,6 @@ type ColibriPath struct {
 	InfoField       *InfoField
 	// HopFields denote the COLIBRI hop fields.
 	HopFields       []*HopField
-}
-
-type InfoField struct {
-	// C denotes the control plane flag.
-	C bool
-	// R denotes the reverse flag.
-	R bool
-	// S denotes the segment flag.
-	S bool
-	// CurrHF denotes the current hop field.
-	CurrHF uint8
-	// HFCount denotes the total number of hop fields.
-	HFCount uint8
-	// ResIdSuffix (12 bytes) denotes the reservation ID suffix.
-	ResIdSuffix []byte
-	// ExpTick denotes the expiration tick, where one tick corresponds to 4 seconds.
-	ExpTick uint32
-	// BwCls denotes the bandwidth class of the reservation.
-	BwCls uint8
-	// Rlx denotes the request latency class of the reservation.
-	Rlc uint8
-	// Ver (4 bits) denotes the reservation version.
-	Ver uint8
-}
-
-func (inf *InfoField) DecodeFromBytes(b []byte) error {
-	return nil
-}
-
-func (inf *InfoField) SerializeTo(b []byte) error {
-	return nil
-}
-
-type HopField struct {
-	// IngressId denotes the ingress interface in the direction of the reservation (R=0).
-	IngressId uint16
-	// EgressId denotes the egress interface in the direction of the reservation (R=0).
-	EgressId uint16
-	// Mac (4 bytes) denotes the MAC (static or per-packet MAC, depending on the S flag).
-	Mac []byte
-}
-
-func (hf *HopField) DecodeFromBytes(b []byte) error {
-	return nil
-}
-
-func (hf *HopField) SerializeTo(b []byte) error {
-	return nil
 }
 
 func (c *ColibriPath) DecodeFromBytes(b []byte) error {
