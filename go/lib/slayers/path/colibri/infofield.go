@@ -95,7 +95,7 @@ func (inf *InfoField) SerializeTo(b []byte) error {
 	binary.BigEndian.PutUint16(b[19:21], uint16(inf.BwCls))
 	binary.BigEndian.PutUint32(b[16:20], inf.ExpTick)
 	var endFlags uint16
-	endFlags += uint16(inf.Ver << 4) << 8
+	endFlags += uint16(inf.Ver<<4) << 8
 	binary.BigEndian.PutUint16(b[22:24], endFlags)
 	return nil
 }

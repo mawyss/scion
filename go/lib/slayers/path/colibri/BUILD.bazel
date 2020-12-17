@@ -4,14 +4,13 @@ go_library(
     name = "go_default_library",
     srcs = [
         "colibri.go",
-        "infofield.go",
         "hopfield.go",
+        "infofield.go",
     ],
     importpath = "github.com/scionproto/scion/go/lib/slayers/path/colibri",
     visibility = ["//visibility:public"],
     deps = [
         "//go/lib/serrors:go_default_library",
         "//go/lib/slayers/path:go_default_library",
-        "//go/lib/slayers/path/scion:go_default_library",
     ],
 )
