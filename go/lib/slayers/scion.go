@@ -25,6 +25,7 @@ import (
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers/path"
+	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
 	"github.com/scionproto/scion/go/lib/slayers/path/onehop"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
@@ -41,6 +42,7 @@ const (
 )
 
 func init() {
+	colibri.RegisterPath()
 	empty.RegisterPath()
 	scion.RegisterPath()
 	onehop.RegisterPath()
