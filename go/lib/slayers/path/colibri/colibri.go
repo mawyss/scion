@@ -58,18 +58,18 @@ func (c *ColibriPath) DecodeFromBytes(b []byte) error {
 	if c.InfoField == nil {
 		c.InfoField = &InfoField{}
 	}
-	nrHopFields := int(c.InfoField.HFCount)
-	if 8+LenInfoField+nrHopFields*LenHopField > len(b) {
-		return serrors.New("raw colibri path is smaller than what is " +
-			"indicated by HFCount in the info field")
-	}
 	if err := c.InfoField.DecodeFromBytes(b[8 : 8+LenInfoField]); err != nil {
 		return err
+	}
+	nrHopFields := int(c.InfoField.HFCount)
+	if 8+LenInfoField+(nrHopFields*LenHopField) > len(b) {
+		return serrors.New("raw colibri path is smaller than what is " +
+			"indicated by HFCount in the info field")
 	}
 	c.HopFields = make([]*HopField, nrHopFields)
 	for i := 0; i < nrHopFields; i++ {
 		start := 8 + LenInfoField + i*LenHopField
-		end := start + (i+1)*LenHopField
+		end := start + LenHopField
 		c.HopFields[i] = &HopField{}
 		if err := c.HopFields[i].DecodeFromBytes(b[start:end]); err != nil {
 			return err
@@ -99,7 +99,7 @@ func (c *ColibriPath) SerializeTo(b []byte) error {
 	}
 	for i, hf := range c.HopFields {
 		start := 8 + LenInfoField + i*LenHopField
-		end := start + (i+1)*LenHopField
+		end := start + LenHopField
 		if err := hf.SerializeTo(b[start:end]); err != nil {
 			return err
 		}

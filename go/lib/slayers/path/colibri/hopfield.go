@@ -53,7 +53,7 @@ func (hf *HopField) SerializeTo(b []byte) error {
 		return serrors.New("raw colibri hop field buffer too small")
 	}
 	if len(hf.Mac) != 4 {
-		return serrors.New("colibri mac must be 4 bytes long", "is:", len(hf.Mac))
+		return serrors.New("colibri mac must be 4 bytes long", "is", len(hf.Mac))
 	}
 	binary.BigEndian.PutUint16(b[:2], hf.IngressId)
 	binary.BigEndian.PutUint16(b[2:4], hf.EgressId)

@@ -58,11 +58,12 @@ func (inf *InfoField) DecodeFromBytes(b []byte) error {
 	inf.S = (flags & (uint16(1) << 13)) != 0
 	inf.CurrHF = uint8(binary.BigEndian.Uint16(b[1:3]))
 	inf.HFCount = uint8(binary.BigEndian.Uint16(b[2:4]))
+	inf.ResIdSuffix = make([]byte, 12)
 	copy(inf.ResIdSuffix, b[4:16])
 	inf.ExpTick = binary.BigEndian.Uint32(b[16:20])
 	inf.BwCls = uint8(binary.BigEndian.Uint16(b[19:21]))
 	inf.Rlc = uint8(binary.BigEndian.Uint16(b[20:22]))
-	inf.Ver = uint8(binary.BigEndian.Uint16(b[21:23])) & uint8(0xF0)
+	inf.Ver = (uint8(binary.BigEndian.Uint16(b[21:23])) & uint8(0xF0)) >> 4
 	return nil
 }
 
@@ -75,7 +76,7 @@ func (inf *InfoField) SerializeTo(b []byte) error {
 	}
 	if len(inf.ResIdSuffix) != 12 {
 		return serrors.New("colibri ResIdSuffix must be 12 bytes long",
-			"is:", len(inf.ResIdSuffix))
+			"is", len(inf.ResIdSuffix))
 	}
 	var flags uint16
 	if inf.C {
