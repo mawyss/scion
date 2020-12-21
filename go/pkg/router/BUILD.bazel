@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "colibri_processing.go",
         "connector.go",
         "dataplane.go",
         "metrics.go",
@@ -12,6 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/lib/addr:go_default_library",
+        "//go/lib/colibri:go_default_library",
         "//go/lib/common:go_default_library",
         "//go/lib/log:go_default_library",
         "//go/lib/metrics:go_default_library",
@@ -19,6 +21,7 @@ go_library(
         "//go/lib/serrors:go_default_library",
         "//go/lib/slayers:go_default_library",
         "//go/lib/slayers/path:go_default_library",
+        "//go/lib/slayers/path/colibri:go_default_library",
         "//go/lib/slayers/path/empty:go_default_library",
         "//go/lib/slayers/path/onehop:go_default_library",
         "//go/lib/slayers/path/scion:go_default_library",
