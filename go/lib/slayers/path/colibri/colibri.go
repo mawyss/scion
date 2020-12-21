@@ -21,21 +21,6 @@ import (
 	"github.com/scionproto/scion/go/lib/slayers/path"
 )
 
-const PathType path.Type = 4
-const LenMinColibri int = 8 + LenInfoField + 2*LenHopField
-
-func RegisterPath() {
-	path.RegisterPath(path.Metadata{
-		Type: PathType,
-		Desc: "Colibri",
-		New: func() path.Path {
-			return &ColibriPath{
-				InfoField: &InfoField{},
-			}
-		},
-	})
-}
-
 type ColibriPath struct {
 	// PacketTimestamp denotes the high-precision timestamp.
 	PacketTimestamp uint64
