@@ -122,15 +122,15 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 	}
 }
 
-func CalculateColibriMac(sharedKey []byte, inf *colibri.InfoField, currHop *colibri.HopField) ([]byte, error) {
+func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField, currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
 
 	// Initialize cryptographic MAC function
-	f, err := initColibriMac(sharedKey)
+	f, err := initColibriMac(privateKey)
 	if err != nil {
 		return nil, err
 	}
 	// Prepare the input for the MAC function
-	input, err := prepareMacInput(s, timestamp)
+	input, err := prepareMacInputStatic(s, timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +144,18 @@ func CalculateColibriMac(sharedKey []byte, inf *colibri.InfoField, currHop *coli
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
-func VerifyMAC(auth []byte, timestamp uint32, inf *colibri.InfoField,
+func VerifyMAC(privateKey []byte, timestamp uint32, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
+
+	if inf == nil {
+		return nil, serrors.New("colibri info field must not be nil") 
+	}
+	
+	mac, err := CalculateColibriMacStatic(privateKey, inf, currHop, s)
+
+	
+
+	
 
 	return bytes.Equal(nil, nil), nil
 }
@@ -163,7 +173,7 @@ func initColibriMac(key []byte) (cipher.BlockMode, error) {
 	return mode, nil
 }
 
-func inputToBytes(timestamp uint32, packetTimestamp uint64,
+func inputToBytesStatic(timestamp uint32, packetTimestamp uint64,
 	srcIA addr.IA, srcAddr []byte, srcAddrLen uint8, payloadLen uint16) ([]byte, error) {
 
 	// TODO
@@ -199,7 +209,7 @@ func inputToBytes(timestamp uint32, packetTimestamp uint64,
 	return input, nil
 }
 
-func prepareMacInput(s *slayers.SCION, timestamp uint32) ([]byte, error) {
+func prepareMacInputStatic(s *slayers.SCION, timestamp uint32) ([]byte, error) {
 	if s == nil {
 		return nil, serrors.New("SCION common+address header must not be nil")
 	}
@@ -207,7 +217,7 @@ func prepareMacInput(s *slayers.SCION, timestamp uint32) ([]byte, error) {
 	srcIA := s.SrcIA
 	srcAddrLen := uint8(s.SrcAddrLen)
 	srcAddr := s.RawSrcAddr
-	//return inputToBytes(timestamp, srcIA, srcAddr, srcAddrLen, payloadLen)
+	//return inputToBytesControl(timestamp, srcIA, srcAddr, srcAddrLen, payloadLen)
 	return nil, nil
 }
 

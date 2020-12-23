@@ -85,6 +85,8 @@ func (c *ColibriPathMinimal) DecodeFromBytes(b []byte) error {
 	return nil
 }
 
+// SerializeToInternal serializes the COLIBRI timestamp and info field to the Raw buffer. No hop
+// field is serialized.
 func (c *ColibriPathMinimal) SerializeToInternal() error {
 	if c == nil {
 		return serrors.New("colibri path must not be nil")
@@ -149,18 +151,48 @@ func (c *ColibriPathMinimal) Type() path.Type {
 	return PathType
 }
 
-// IncPath increases the CurrHF if appropriate.
-// The CurrHopField is not updated and will still point to the old hop field.
-func (c *ColibriPathMinimal) IncPath() error {
+// UpdateCurrHF increases/decreases the CurrHF index depending on the R flag.
+// The CurrHopField pointer is not updated and will still point to the old hop field.
+func (c *ColibriPathMinimal) UpdateCurrHF() error {
 	if c == nil {
 		return serrors.New("colibri path must not be nil")
 	}
 	if c.InfoField == nil {
 		return serrors.New("the colibri info field must not be nil")
 	}
-	if c.InfoField.CurrHF >= c.InfoField.HFCount {
-		return serrors.New("colibri path already at end")
+
+	if c.InfoField.R {
+		if c.InfoField.CurrHF == 0 {
+			return serrors.New("colibri path already at (reversed) end")
+		}
+		c.InfoField.CurrHF = c.InfoField.CurrHF - 1
+	} else {
+		if c.InfoField.CurrHF + 1 >= c.InfoField.HFCount {
+			return serrors.New("colibri path already at end")
+		}
+		c.InfoField.CurrHF = c.InfoField.CurrHF + 1
 	}
-	c.InfoField.CurrHF = c.InfoField.CurrHF + 1
 	return nil
+}
+
+// IsLastHop returns whether the currHF index denotes the last hop.
+func (c *ColibriPathMinimal) IsLastHop() bool {
+	if c == nil {
+		return serrors.New("colibri path must not be nil")
+	}
+	if c.InfoField == nil {
+		return serrors.New("the colibri info field must not be nil")
+	}
+	
+
+	if c.InfoField.R {
+		if c.InfoField.CurrHF == 0 {
+			return true
+		}
+	} else {
+		if c.InfoField.CurrHF + 1 == c.InfoField.HFCount {
+			return true
+		}
+	}
+	return false
 }
