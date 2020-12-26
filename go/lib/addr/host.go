@@ -70,6 +70,7 @@ const (
 	SvcSB       HostSVC = 0x0003
 	SvcSIG      HostSVC = 0x0004
 	SvcHPS      HostSVC = 0x0005
+	SvcCOL      HostSVC = 0x0006
 	SvcWildcard HostSVC = 0x0010
 	SvcNone     HostSVC = 0xffff
 

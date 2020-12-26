@@ -176,23 +176,22 @@ func (c *ColibriPathMinimal) UpdateCurrHF() error {
 }
 
 // IsLastHop returns whether the currHF index denotes the last hop.
-func (c *ColibriPathMinimal) IsLastHop() bool {
+func (c *ColibriPathMinimal) IsLastHop() (bool, error) {
 	if c == nil {
-		return serrors.New("colibri path must not be nil")
+		return false, serrors.New("colibri path must not be nil")
 	}
 	if c.InfoField == nil {
-		return serrors.New("the colibri info field must not be nil")
+		return false, serrors.New("the colibri info field must not be nil")
 	}
 	
-
 	if c.InfoField.R {
 		if c.InfoField.CurrHF == 0 {
-			return true
+			return true, nil
 		}
 	} else {
 		if c.InfoField.CurrHF + 1 == c.InfoField.HFCount {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }

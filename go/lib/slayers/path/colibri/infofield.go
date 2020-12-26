@@ -100,3 +100,40 @@ func (inf *InfoField) SerializeTo(b []byte) error {
 	binary.BigEndian.PutUint16(b[22:24], endFlags)
 	return nil
 }
+
+// SerializeToMac serializes the InfoField for the use in the colibri static MAC calculation.
+// It does the same as SerializeTo(), but replaces the fields that should not be part of the MAC
+// input with zeroes.
+func (inf *InfoField) SerializeToMac(b []byte) error {
+	if inf == nil {
+		return serrors.New("colibri info field must not be nil")
+	}
+	if len(b) < LenInfoField {
+		return serrors.New("raw colibri info field buffer too small")
+	}
+	if len(inf.ResIdSuffix) != 12 {
+		return serrors.New("colibri ResIdSuffix must be 12 bytes long",
+			"is", len(inf.ResIdSuffix))
+	}
+	var flags uint16
+	if inf.C {
+		flags += uint16(1) << 15
+	}
+	if inf.R {
+		flags += uint16(1) << 14
+	}
+	if inf.S {
+		flags += uint16(1) << 13
+	}
+	binary.BigEndian.PutUint16(b[2:4], uint16(inf.HFCount))
+	binary.BigEndian.PutUint16(b[1:3], uint16(inf.CurrHF))
+	binary.BigEndian.PutUint16(b[:2], flags)
+	copy(b[4:16], inf.ResIdSuffix)
+	binary.BigEndian.PutUint16(b[20:22], uint16(inf.Rlc))
+	binary.BigEndian.PutUint16(b[19:21], uint16(inf.BwCls))
+	binary.BigEndian.PutUint32(b[16:20], inf.ExpTick)
+	var endFlags uint16
+	endFlags += uint16(inf.Ver<<4) << 8
+	binary.BigEndian.PutUint16(b[22:24], endFlags)
+	return nil
+}

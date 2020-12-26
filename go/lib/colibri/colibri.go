@@ -123,6 +123,7 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 }
 
 func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField, currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
+	// TODO: Why not authenticate CurrHF?
 
 	// Initialize cryptographic MAC function
 	f, err := initColibriMac(privateKey)
@@ -130,34 +131,63 @@ func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField, currHo
 		return nil, err
 	}
 	// Prepare the input for the MAC function
-	input, err := prepareMacInputStatic(s, timestamp)
+	input, err := prepareMacInputStatic(s, inf, currHop)
 	if err != nil {
 		return nil, err
 	}
 	if len(input) < 16 || len(input)%16 != 0 {
-		return nil, serrors.New("colibri mac input has invalid length", "expected", 16,
+		return nil, serrors.New("colibri static mac input has invalid length", "expected", 16,
 			"is", len(input))
 	}
-	// Calculate Colibri MAC = first 4 bytes of the last CBC block
+	// Calculate CBC-MAC = first 4 bytes of the last CBC block
 	mac := make([]byte, len(input))
 	f.CryptBlocks(mac, input)
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
-func VerifyMAC(privateKey []byte, timestamp uint32, inf *colibri.InfoField,
+func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
+	// TODO: authenticate the whole packet size or only payload?
+	// payload should be enough, because HFCount in the info field is authenticated anyway.
+	
+	// Initialize cryptographic MAC function
+	f, err := initColibriMac(auth)
+	if err != nil {
+		return nil, err
+	}
+	// Prepare the input for the MAC function
+	input, err := prepareMacInputPacket(s, packetTimestamp, inf)
+	if err != nil {
+		return nil, err
+	}
+	if len(input) < 16 || len(input)%16 != 0 {
+		return nil, serrors.New("colibri per-packet mac input has invalid length", "expected", 16,
+			"is", len(input))
+	}
+	// Calculate CBC-MAC = first 4 bytes of the last CBC block
+	mac := make([]byte, len(input))
+	f.CryptBlocks(mac, input)
+	return mac[len(mac)-16 : len(mac)-12], nil
+}
+
+func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
 
 	if inf == nil {
-		return nil, serrors.New("colibri info field must not be nil") 
+		return false, serrors.New("colibri info field must not be nil") 
 	}
 	
+	// Calculate static MAC
 	mac, err := CalculateColibriMacStatic(privateKey, inf, currHop, s)
 
+	// If it is a dataplane packet (C = 0), then further calculate the per-packet MAC
+	if !inf.C {
+		mac, err = CalculateColibriMacPacket(mac, s, packetTimestamp, inf)
+		if err != nil {
+			return false, err
+		}
+	}
 	
-
-	
-
-	return bytes.Equal(nil, nil), nil
+	return bytes.Equal(mac, currHop.Mac), nil
 }
 
 func initColibriMac(key []byte) (cipher.BlockMode, error) {
@@ -173,19 +203,17 @@ func initColibriMac(key []byte) (cipher.BlockMode, error) {
 	return mode, nil
 }
 
-func inputToBytesStatic(timestamp uint32, packetTimestamp uint64,
-	srcIA addr.IA, srcAddr []byte, srcAddrLen uint8, payloadLen uint16) ([]byte, error) {
-
+func inputToBytesPacket(packetTimestamp uint64, expTick uint32, payloadLen uint16) ([]byte, error) {
 	// TODO
 
-	//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//   | flags (1B) | timestamp (4B) | packetTimestamp (8B)  |
-	//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//   | srcIA (8B) | srcAddr (4/8/12/16B) | payloadLen (2B) |
-	//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	//   | zero padding (0-15B)                                |
-	//   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	// The "flags" field only encodes the length of the source address.
+	input := make([]byte, 16)
+	return input, nil
+}
+
+func inputToBytesStatic(srcIA addr.IA, srcAddr []byte, srcAddrLen uint8,
+	ingressId uint16, egressId uint16, infoField []byte) ([]byte, error) {
+
+	// TODO
 
 	l := int((srcAddrLen + 1) * 4)
 	if srcAddrLen > 3 || l != len(srcAddr) {
@@ -199,26 +227,32 @@ func inputToBytesStatic(timestamp uint32, packetTimestamp uint64,
 	input := make([]byte, 16*nrBlocks)
 
 	// Fill input
-	input[0] = srcAddrLen
-	binary.BigEndian.PutUint32(input[1:5], timestamp)
-	binary.BigEndian.PutUint64(input[5:13], packetTimestamp)
-	binary.BigEndian.PutUint64(input[13:21], uint64(srcIA.A))
-	binary.BigEndian.PutUint16(input[13:15], uint16(srcIA.I))
-	copy(input[21:(21+l)], srcAddr[:l])
-	binary.BigEndian.PutUint16(input[(21+l):(23+l)], payloadLen)
+	// binary.BigEndian.PutUint32(to, from)
+
 	return input, nil
 }
 
-func prepareMacInputStatic(s *slayers.SCION, timestamp uint32) ([]byte, error) {
+func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
 	if s == nil {
 		return nil, serrors.New("SCION common+address header must not be nil")
 	}
 	payloadLen := s.PayloadLen
+	expTick := inf.ExpTick
+	return inputToBytesPacket(packetTimestamp, expTick, payloadLen)
+}
+
+func prepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField, hop *colibri.HopField) ([]byte, error) {
+	if s == nil {
+		return nil, serrors.New("SCION common+address header must not be nil")
+	}
 	srcIA := s.SrcIA
 	srcAddrLen := uint8(s.SrcAddrLen)
 	srcAddr := s.RawSrcAddr
-	//return inputToBytesControl(timestamp, srcIA, srcAddr, srcAddrLen, payloadLen)
-	return nil, nil
+	ingressId := hop.IngressId
+	egressId := hop.EgressId
+	infSerialized := make([]byte, colibri.LenInfoField)
+	inf.SerializeToMac(infSerialized)
+	return inputToBytesStatic(srcIA, srcAddr, srcAddrLen, ingressId, egressId, infSerialized)
 }
 
 func max(x, y uint64) uint64 {
