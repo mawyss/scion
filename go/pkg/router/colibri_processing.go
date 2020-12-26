@@ -17,6 +17,7 @@ package router
 import (
 	"github.com/google/gopacket"
 	
+	"github.com/scionproto/scion/go/lib/addr"
 	libcolibri "github.com/scionproto/scion/go/lib/colibri"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
@@ -45,7 +46,7 @@ type colibriPacketProcessor struct {
 
 func (c *colibriPacketProcessor) process() (processResult, error) {
 	if c == nil {
-		return 0, serrors.New("colibri packet processor must not be nil")
+		return processResult{}, serrors.New("colibri packet processor must not be nil")
 	}
 
 	// Get path
@@ -65,7 +66,10 @@ func (c *colibriPacketProcessor) process() (processResult, error) {
 }
 
 func (c *colibriPacketProcessor) forward() (processResult, error) {
-	egressId := c.egressInterface()
+	egressId, err := c.egressInterface()
+	if err != nil {
+		return processResult{}, err
+	}
 
 	if c.ingressID == 0 {
 		// Received packet from within AS
@@ -75,72 +79,19 @@ func (c *colibriPacketProcessor) forward() (processResult, error) {
 	// Received packet from outside of the AS
 	if c.colibriPathMinimal.InfoField.C {
 		// Control plane forwarding
-		c.forwardToColibriSvc() // TODO
+		// TODO: can there be multiple colibri services? (may need to select one deterministically?)
+		return c.forwardToColibriSvc()
 	} else {
 		// Data plane forwarding
 		if c.destinedToLocalHost(egressId) {
-			c.forwardToLocalHost() // TODO
+			return c.forwardToLocalHost()
 		} else {
 			if r, err := c.forwardToLocalEgress(egressId); err == nil {
 				return r, err
 			}
-			c.forwardToRemoteEgress(egressId)
+			return c.forwardToRemoteEgress(egressId)
 		}
 	}
-
-
-	// Inbound: packet destined to the local IA. (SCION: resolveInbound())
-	if c.scionLayer.DstIA.Equal(c.d.localIA) && c.colibriPathMinimal.IsLastHop() {
-		a, err := c.d.resolveLocalDst(c.scionLayer)
-		if err != nil {
-			return processResult{}, err
-		}
-		return processResult{OutConn: c.d.internal, OutAddr: a, OutPkt: c.rawPkt}, nil
-	}
-
-	// Outbound: pkts leaving the local IA.
-	// and
-	// BRTransit: pkts leaving from the same BR different interface.
-
-	// Only if we want SCMP for COLIBRI:
-	// Checks if the egress interface is registered (either at same BR or at other BR of the same AS)
-	//if r, err := p.validateEgressID(); err != nil {
-	//	return r, err
-	//}
-
-	// Only if we want SCMP for COLIBRI:
-	// Check if BFD session for this egress interface is up.
-	//if r, err := p.validateEgressUp(); err != nil {
-	//	return r, err
-	//}
-
-	egressID := p.egressInterface()
-	if c, ok := p.d.external[egressID]; ok {
-		// Increase the hop pointer, serialize the whole address/common/pathtype header structs into rawPkt
-		if err := p.processEgress(); err != nil {
-			return processResult{}, err
-		}
-		return processResult{EgressID: egressID, OutConn: c, OutPkt: p.rawPkt}, nil
-	}
-
-	// ASTransit: pkts leaving from another AS BR.
-	if a, ok := p.d.internalNextHops[egressID]; ok {
-		return processResult{OutConn: p.d.internal, OutAddr: a, OutPkt: p.rawPkt}, nil
-	}
-
-	/*
-	errCode := slayers.SCMPCodeUnknownHopFieldEgress
-	if !p.infoField.ConsDir {
-		errCode = slayers.SCMPCodeUnknownHopFieldIngress
-	}
-	return p.packSCMP(
-		&slayers.SCMP{
-			TypeCode: slayers.CreateSCMPTypeCode(slayers.SCMPTypeParameterProblem, errCode),
-		},
-		&slayers.SCMPParameterProblem{Pointer: p.currentHopPointer()},
-		cannotRoute,
-	)
-	*/
 }
 
 func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
@@ -176,7 +127,13 @@ func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
 			"currHF", currHF, "hfCount", hfCount)
 	}
 
-	// TODO: Packet freshness
+	// Packet freshness
+	expTick := c.colibriPathMinimal.InfoField.ExpTick
+	timestamp := c.colibriPathMinimal.PacketTimestamp
+	isFresh := libcolibri.VerifyTimestamp(expTick, timestamp)
+	if !isFresh {
+		return processResult{}, serrors.New("verification of packet timestamp failed")
+	}
 
 	return processResult{}, nil
 }
@@ -212,7 +169,7 @@ func (c *colibriPacketProcessor) egressInterface() (uint16, error) {
 	}
 
 	if c.colibriPathMinimal.InfoField.R {
-		return c.colibriPathMinimal.CurrHopField.Ingress, nil
+		return c.colibriPathMinimal.CurrHopField.IngressId, nil
 	} else {
 		return c.colibriPathMinimal.CurrHopField.EgressId, nil
 	}
@@ -242,7 +199,7 @@ func (c *colibriPacketProcessor) ingressInterface() (uint16, error) {
 func (c *colibriPacketProcessor) forwardToLocalEgress(egressId uint16) (processResult, error) {
 	// BR transit: the packet will leave the AS through the same border router, but through a
 	// different interface.
-	if conn, ok := c.d.external[egressID]; ok {
+	if conn, ok := c.d.external[egressId]; ok {
 		// Increase/decrease (depending on "R" flag) the hop field index.
 		if err := c.colibriPathMinimal.UpdateCurrHF(); err != nil {
 			return processResult{}, err
@@ -259,7 +216,7 @@ func (c *colibriPacketProcessor) forwardToLocalEgress(egressId uint16) (processR
 
 func (c *colibriPacketProcessor) forwardToRemoteEgress(egressId uint16) (processResult, error) {
 	// AS transit: the packet will leave the AS from another border router.
-	if a, ok := c.d.internalNextHops[egressID]; ok {
+	if a, ok := c.d.internalNextHops[egressId]; ok {
 		return processResult{OutConn: c.d.internal, OutAddr: a, OutPkt: c.rawPkt}, nil
 	} else {
 		return processResult{}, serrors.New("no remote border router with this egress id",
@@ -267,7 +224,29 @@ func (c *colibriPacketProcessor) forwardToRemoteEgress(egressId uint16) (process
 	}
 }
 
-func (c *colibriPacketProcessor) destinedToLocalHost(egressId) bool {
-	return c.scionLayer.DstIA.Equal(c.d.localIA) && egressId == 0 &&
-		c.colibriPathMinimal.IsLastHop()
+func (c *colibriPacketProcessor) destinedToLocalHost(egressId uint16) bool {
+	isLast, _ := c.colibriPathMinimal.IsLastHop()
+	return c.scionLayer.DstIA.Equal(c.d.localIA) && egressId == 0 && isLast
+		
+}
+
+// For the colibri data plane
+func (c *colibriPacketProcessor) forwardToLocalHost() (processResult, error) {
+	// Inbound: packet destined to the local IA.
+	a, err := c.d.resolveLocalDst(c.scionLayer)
+	if err != nil {
+		return processResult{}, err
+	}
+	return processResult{OutConn: c.d.internal, OutAddr: a, OutPkt: c.rawPkt}, nil
+}
+
+func (c *colibriPacketProcessor) forwardToColibriSvc() (processResult, error) {
+	// Inbound: packet destined to the local colibri service.
+
+	// Get address of colibri service
+	a, ok := c.d.svc.Any(addr.SvcCOL.Base())
+	if !ok {
+		return processResult{}, serrors.New("no colibri service registered at border router")
+	}
+	return processResult{OutConn: c.d.internal, OutAddr: a, OutPkt: c.rawPkt}, nil
 }
