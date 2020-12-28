@@ -16,7 +16,7 @@ package router
 
 import (
 	"github.com/google/gopacket"
-	
+
 	"github.com/scionproto/scion/go/lib/addr"
 	libcolibri "github.com/scionproto/scion/go/lib/colibri"
 	"github.com/scionproto/scion/go/lib/serrors"
@@ -210,7 +210,8 @@ func (c *colibriPacketProcessor) forwardToLocalEgress(egressId uint16) (processR
 		}
 		return processResult{EgressID: egressId, OutConn: conn, OutPkt: c.rawPkt}, nil
 	} else {
-		return processResult{}, serrors.New("no external interface with this id", "egressId", egressId)
+		return processResult{}, serrors.New("no external interface with this id",
+			"egressId", egressId)
 	}
 }
 
@@ -227,7 +228,6 @@ func (c *colibriPacketProcessor) forwardToRemoteEgress(egressId uint16) (process
 func (c *colibriPacketProcessor) destinedToLocalHost(egressId uint16) bool {
 	isLast, _ := c.colibriPathMinimal.IsLastHop()
 	return c.scionLayer.DstIA.Equal(c.d.localIA) && egressId == 0 && isLast
-		
 }
 
 // For the colibri data plane

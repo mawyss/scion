@@ -167,7 +167,7 @@ func (c *ColibriPathMinimal) UpdateCurrHF() error {
 		}
 		c.InfoField.CurrHF = c.InfoField.CurrHF - 1
 	} else {
-		if c.InfoField.CurrHF + 1 >= c.InfoField.HFCount {
+		if c.InfoField.CurrHF+1 >= c.InfoField.HFCount {
 			return serrors.New("colibri path already at end")
 		}
 		c.InfoField.CurrHF = c.InfoField.CurrHF + 1
@@ -183,13 +183,13 @@ func (c *ColibriPathMinimal) IsLastHop() (bool, error) {
 	if c.InfoField == nil {
 		return false, serrors.New("the colibri info field must not be nil")
 	}
-	
+
 	if c.InfoField.R {
 		if c.InfoField.CurrHF == 0 {
 			return true, nil
 		}
 	} else {
-		if c.InfoField.CurrHF + 1 == c.InfoField.HFCount {
+		if c.InfoField.CurrHF+1 == c.InfoField.HFCount {
 			return true, nil
 		}
 	}

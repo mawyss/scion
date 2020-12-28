@@ -37,7 +37,8 @@ const (
 )
 
 // CreateColibriTimestamp creates the COLIBRI packetTimestamp from tsRel, coreID, and coreCounter.
-func CreateColibriTimestamp(tsRel uint32, coreID uint8, coreCounter uint32) (packetTimestamp uint64) {
+func CreateColibriTimestamp(tsRel uint32, coreID uint8,
+	coreCounter uint32) (packetTimestamp uint64) {
 	// 0                   1                   2                   3
 	// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 	// +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -70,7 +71,9 @@ func CreateColibriTimestampCustom(tsRel uint32, pckId uint32) (packetTimestamp u
 }
 
 // ParseColibriTimestamp reads tsRel, coreID, and coreCounter from the packetTimestamp.
-func ParseColibriTimestamp(packetTimestamp uint64) (tsRel uint32, coreID uint8, coreCounter uint32) {
+func ParseColibriTimestamp(packetTimestamp uint64) (tsRel uint32, coreID uint8,
+	coreCounter uint32) {
+
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b[:8], packetTimestamp)
 	tsRel = binary.BigEndian.Uint32(b[:4])
@@ -85,7 +88,7 @@ func ParseColibriTimestamp(packetTimestamp uint64) (tsRel uint32, coreID uint8, 
 // If the current time is not between the expiration time minus 16 seconds and the expiration time,
 // an error is returned.
 func CreateTsRel(expirationTick uint32) (uint32, error) {
-	expirationNano := 4*uint64(expirationTick) * uint64(math.Pow10(9))
+	expirationNano := 4 * uint64(expirationTick) * uint64(math.Pow10(9))
 	timestampNano := (4*uint64(expirationTick) - 16) * uint64(math.Pow10(9))
 	nowNano := uint64(time.Now().UnixNano())
 	if nowNano > expirationNano {
@@ -94,7 +97,7 @@ func CreateTsRel(expirationTick uint32) (uint32, error) {
 	}
 	if nowNano < timestampNano {
 		return 0, serrors.New("provided packet expiration time is too far in the future",
-		"timestampNano", timestampNano, "now", nowNano)
+			"timestampNano", timestampNano, "now", nowNano)
 	}
 	diff := nowNano - timestampNano
 	tsRel := max(0, (diff/4)-1)
@@ -110,7 +113,7 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 	tsRel, _, _ := ParseColibriTimestamp(packetTimestamp)
 	timestampNano := (4*uint64(expirationTick) - 16) * uint64(math.Pow10(9))
 	timestampSenderNano := timestampNano + (1+uint64(tsRel))*4
-	
+
 	nowMs := uint64(time.Now().UnixNano() / 1000000)
 	tsSenderMs := timestampSenderNano / 1000000
 
@@ -122,7 +125,9 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 	}
 }
 
-func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField, currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
+func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
+	currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
+
 	// TODO: Why not authenticate CurrHF?
 
 	// Initialize cryptographic MAC function
@@ -145,10 +150,12 @@ func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField, currHo
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
-func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
+func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64,
+	inf *colibri.InfoField) ([]byte, error) {
+
 	// TODO: authenticate the whole packet size or only payload?
 	// payload should be enough, because HFCount in the info field is authenticated anyway.
-	
+
 	// Initialize cryptographic MAC function
 	f, err := initColibriMac(auth)
 	if err != nil {
@@ -173,11 +180,14 @@ func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField
 	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
 
 	if inf == nil {
-		return false, serrors.New("colibri info field must not be nil") 
+		return false, serrors.New("colibri info field must not be nil")
 	}
-	
+
 	// Calculate static MAC
 	mac, err := CalculateColibriMacStatic(privateKey, inf, currHop, s)
+	if err != nil {
+		return false, err
+	}
 
 	// If it is a dataplane packet (C = 0), then further calculate the per-packet MAC
 	if !inf.C {
@@ -186,7 +196,7 @@ func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField
 			return false, err
 		}
 	}
-	
+
 	return bytes.Equal(mac, currHop.Mac), nil
 }
 
@@ -232,7 +242,9 @@ func inputToBytesStatic(srcIA addr.IA, srcAddr []byte, srcAddrLen uint8,
 	return input, nil
 }
 
-func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
+func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64,
+	inf *colibri.InfoField) ([]byte, error) {
+
 	if s == nil {
 		return nil, serrors.New("SCION common+address header must not be nil")
 	}
@@ -241,7 +253,9 @@ func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64, inf *colibr
 	return inputToBytesPacket(packetTimestamp, expTick, payloadLen)
 }
 
-func prepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField, hop *colibri.HopField) ([]byte, error) {
+func prepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField,
+	hop *colibri.HopField) ([]byte, error) {
+
 	if s == nil {
 		return nil, serrors.New("SCION common+address header must not be nil")
 	}
