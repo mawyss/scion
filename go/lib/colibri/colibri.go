@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package colibri contains methods for the creation and verification of the colibri packet
+// timestamp and validation fields.
 package colibri
 
 import (
@@ -26,7 +28,6 @@ import (
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
-	//"github.com/scionproto/scion/go/lib/slayers/path/scion"
 )
 
 const (
@@ -125,6 +126,7 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 	}
 }
 
+// CalculateColibriMacStatic calculates the static colibri MAC.
 func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
 
@@ -150,6 +152,7 @@ func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
+// CalculateColibriMacPacket calculates the per-packet colibri MAC.
 func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64,
 	inf *colibri.InfoField) ([]byte, error) {
 
@@ -176,6 +179,7 @@ func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp ui
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
+// VerifyMAC verifies the authenticity of the MAC in the colibri hop field.
 func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
 

@@ -35,11 +35,21 @@ func TestColibriSerializeDecode(t *testing.T) {
 		buffer[10] = uint8(i - 1)
 		buffer[11] = uint8(i)
 
+		// Test ColibriPath
 		col := &colibri.ColibriPath{}
 		assert.NoError(t, col.DecodeFromBytes(buffer))
 
 		buffer2 := make([]byte, col.Len())
 		assert.NoError(t, col.SerializeTo(buffer2))
 		assert.Equal(t, buffer, buffer2)
+
+		// Test ColibriPathMinimal
+		colMin := &colibri.ColibriPathMinimal{}
+		colMin2 := &colibri.ColibriPathMinimal{}
+		assert.NoError(t, colMin.DecodeFromBytes(buffer))
+		buffer2 = make([]byte, colMin.Len())
+		assert.NoError(t, colMin.SerializeTo(buffer2))
+		assert.NoError(t, colMin2.DecodeFromBytes(buffer2))
+		assert.Equal(t, colMin, colMin2)
 	}
 }
