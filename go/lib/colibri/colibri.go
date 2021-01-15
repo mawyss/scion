@@ -24,7 +24,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/scionproto/scion/go/lib/addr"
+	//"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
@@ -35,6 +35,10 @@ const (
 	packetLifetimeMs uint16 = 2000
 	// clockSkewMs denotes the maximal clock skew in milliseconds
 	clockSkewMs uint16 = 1000
+	// lengthInputData denotes the length of InputData in bytes
+	lengthInputData = 30
+	// lengthInputDataRound16 denotes the lengthInputData rounded to the next multiple of 16
+	lengthInputDataRound16 = 32
 )
 
 // CreateColibriTimestamp creates the COLIBRI packetTimestamp from tsRel, coreID, and coreCounter.
@@ -81,6 +85,15 @@ func ParseColibriTimestamp(packetTimestamp uint64) (tsRel uint32, coreID uint8,
 	coreID = uint8(binary.BigEndian.Uint16(b[3:5]))
 	coreCounter = binary.BigEndian.Uint32(b[4:8]) % (1 << 24)
 	return tsRel, coreID, coreCounter
+}
+
+// ParseColibriTimestampCustom reads tsRel and pckId from the packetTimestamp.
+func ParseColibriTimestampCustom(packetTimestamp uint64) (tsRel uint32, pckId uint32) {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b[:8], packetTimestamp)
+	tsRel = binary.BigEndian.Uint32(b[:4])
+	pckId = binary.BigEndian.Uint32(b[4:8])
+	return
 }
 
 // CreateTsRel returns tsRel, which encodes the current time (the time when this function is called)
@@ -130,8 +143,6 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
 
-	// TODO: Why not authenticate CurrHF?
-
 	// Initialize cryptographic MAC function
 	f, err := initColibriMac(privateKey)
 	if err != nil {
@@ -152,6 +163,27 @@ func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
+// CalculateColibriMacSigma calculates "sigma" authenticator.
+func CalculateColibriMacSigma(privateKey []byte, inf *colibri.InfoField,
+	currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
+
+	// Initialize cryptographic MAC function
+	f, err := initColibriMac(privateKey)
+	if err != nil {
+		return nil, err
+	}
+	// Prepare the input for the MAC function
+	input, err := prepareMacInputSigma(s, inf, currHop)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate CBC-MAC = last CBC block
+	mac := make([]byte, len(input))
+	f.CryptBlocks(mac, input)
+	return mac[len(mac)-16:], nil
+}
+
 // CalculateColibriMacPacket calculates the per-packet colibri MAC.
 func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64,
 	inf *colibri.InfoField) ([]byte, error) {
@@ -165,7 +197,7 @@ func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp ui
 		return nil, err
 	}
 	// Prepare the input for the MAC function
-	input, err := prepareMacInputPacket(s, packetTimestamp, inf)
+	input, err := prepareMacInputPacket(s, packetTimestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -183,25 +215,27 @@ func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp ui
 func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
 
-	if inf == nil {
-		return false, serrors.New("colibri info field must not be nil")
-	}
+	var mac []byte
+	var err error
 
-	// Calculate static MAC
-	mac, err := CalculateColibriMacStatic(privateKey, inf, currHop, s)
-	if err != nil {
-		return false, err
-	}
-
-	// If it is a dataplane packet (C = 0), then further calculate the per-packet MAC
-	if !inf.C {
-		mac, err = CalculateColibriMacPacket(mac, s, packetTimestamp, inf)
+	switch inf.C {
+	case true:
+		mac, err = CalculateColibriMacStatic(privateKey, inf, currHop, s)
+		if err != nil {
+			return false, err
+		}
+	case false:
+		auth, err := CalculateColibriMacSigma(privateKey, inf, currHop, s)
+		if err != nil {
+			return false, err
+		}
+		mac, err = CalculateColibriMacPacket(auth, s, packetTimestamp, inf)
 		if err != nil {
 			return false, err
 		}
 	}
 
-	return bytes.Equal(mac, currHop.Mac), nil
+	return bytes.Equal(mac[:4], currHop.Mac[:4]), nil
 }
 
 func initColibriMac(key []byte) (cipher.BlockMode, error) {
@@ -217,60 +251,86 @@ func initColibriMac(key []byte) (cipher.BlockMode, error) {
 	return mode, nil
 }
 
-func inputToBytesPacket(packetTimestamp uint64, expTick uint32, payloadLen uint16) ([]byte, error) {
-	// TODO
-
-	input := make([]byte, 16)
-	return input, nil
-}
-
-func inputToBytesStatic(srcIA addr.IA, srcAddr []byte, srcAddrLen uint8,
-	ingressId uint16, egressId uint16, infoField []byte) ([]byte, error) {
-
-	// TODO
-
-	l := int((srcAddrLen + 1) * 4)
-	if srcAddrLen > 3 || l != len(srcAddr) {
-		return nil, serrors.New("srcAddrLen must be between 0 and 3, and encode the "+
-			"srcAddr length", "srcAddrLen", srcAddrLen, "len(srcAddr)", len(srcAddr),
-			"l", l)
-	}
-
-	// Create a multiple of 16 such that the input fits in
-	nrBlocks := uint8(math.Ceil((23 + float64(l)) / 16))
-	input := make([]byte, 16*nrBlocks)
-
-	// Fill input
-	// binary.BigEndian.PutUint32(to, from)
-
-	return input, nil
-}
-
-func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64,
-	inf *colibri.InfoField) ([]byte, error) {
-
-	if s == nil {
-		return nil, serrors.New("SCION common+address header must not be nil")
-	}
-	payloadLen := s.PayloadLen
-	expTick := inf.ExpTick
-	return inputToBytesPacket(packetTimestamp, expTick, payloadLen)
-}
-
 func prepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField,
 	hop *colibri.HopField) ([]byte, error) {
 
-	if s == nil {
-		return nil, serrors.New("SCION common+address header must not be nil")
+	// Create buffer large enough to store InputData, with length aligned to 16 bytes
+	buffer := make([]byte, lengthInputDataRound16)
+	err := prepareInputData(s, inf, hop, buffer)
+	if err != nil {
+		return nil, err
 	}
-	srcIA := s.SrcIA
-	srcAddrLen := uint8(s.SrcAddrLen)
-	srcAddr := s.RawSrcAddr
-	ingressId := hop.IngressId
-	egressId := hop.EgressId
-	infSerialized := make([]byte, colibri.LenInfoField)
-	inf.SerializeToMac(infSerialized)
-	return inputToBytesStatic(srcIA, srcAddr, srcAddrLen, ingressId, egressId, infSerialized)
+	return buffer, nil
+}
+
+func prepareMacInputSigma(s *slayers.SCION, inf *colibri.InfoField,
+	hop *colibri.HopField) ([]byte, error) {
+
+	// Write SL/ST/DL/DT into one single byte
+	flags := uint8(s.DstAddrType&0x3)<<6 | uint8(s.DstAddrLen&0x3)<<4 |
+		uint8(s.SrcAddrType&0x3)<<2 | uint8(s.SrcAddrLen&0x3)
+
+	// The MAC input consists of the InputData plus the host addresses and the flags, rounded
+	// up to the next multiple of 16 bytes
+	srcLen := len(s.RawSrcAddr)
+	dstLen := len(s.RawDstAddr)
+	bufLen := lengthInputData + 1 + srcLen + dstLen
+	nrBlocks := uint8(math.Ceil(float64(bufLen) / 16))
+	buffer := make([]byte, 16*nrBlocks)
+
+	err := prepareInputData(s, inf, hop, buffer)
+	if err != nil {
+		return nil, err
+	}
+	buffer[lengthInputData] = flags
+	copy(buffer[lengthInputData+1:], s.RawSrcAddr)
+	copy(buffer[lengthInputData+1+srcLen:], s.RawDstAddr)
+
+	return buffer, nil
+}
+
+func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64) ([]byte, error) {
+	if s == nil {
+		return nil, serrors.New("invalid input")
+	}
+
+	input := make([]byte, 16)
+	binary.BigEndian.PutUint64(input[0:8], packetTimestamp)
+	binary.BigEndian.PutUint16(input[8:10], s.PayloadLen)
+
+	return input, nil
+}
+
+// prepareInputData writes InputData to the given buffer.
+func prepareInputData(s *slayers.SCION, inf *colibri.InfoField,
+	hop *colibri.HopField, buffer []byte) error {
+
+	if s == nil || inf == nil || hop == nil {
+		return serrors.New("invalid input")
+	}
+	if len(buffer) < lengthInputData {
+		return serrors.New("provided buffer is too small")
+	}
+
+	copy(buffer[0:12], inf.ResIdSuffix)
+	binary.BigEndian.PutUint32(buffer[12:16], inf.ExpTick)
+	buffer[16] = inf.BwCls
+	buffer[17] = inf.Rlc
+	buffer[18] = inf.HFCount
+
+	// Version | C | 0
+	var flags uint8
+	if inf.C {
+		flags = uint8(1) << 3
+	}
+	flags += inf.Ver << 4
+	buffer[19] = flags
+	srcAs := uint64(s.SrcIA.A)
+	binary.BigEndian.PutUint64(buffer[22:30], srcAs)
+	binary.BigEndian.PutUint16(buffer[20:22], hop.IngressId)
+	binary.BigEndian.PutUint16(buffer[22:24], hop.EgressId)
+
+	return nil
 }
 
 func max(x, y uint64) uint64 {

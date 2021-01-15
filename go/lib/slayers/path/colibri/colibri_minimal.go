@@ -128,15 +128,36 @@ func (c *ColibriPathMinimal) SerializeTo(b []byte) error {
 	return nil
 }
 
+// Reverse reverses the path: the R-flag is toggled and the order of the Hop Fields is inverted.
+// This is reflected in the underlying Raw buffer, as well as the updated Info and Hop Field.
 func (c *ColibriPathMinimal) Reverse() (path.Path, error) {
+	// XXX(mawyss): The current implementation is not the most performant, as it parses the entire
+	// path first. If this becomes a performance bottleneck, the implementation should be changed to
+	// work directly on the ColibriPathMinimal.Raw buffer.
+
 	if c == nil {
 		return nil, serrors.New("colibri path must not be nil")
 	}
 	if c.InfoField == nil {
 		return nil, serrors.New("the colibri info field must not be nil")
 	}
-	c.InfoField.R = !c.InfoField.R
-	return c, nil
+
+	colibriPath, err := c.ToColibriPath()
+	if err != nil {
+		return nil, err
+	}
+
+	reversed, err := colibriPath.Reverse()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := reversed.SerializeTo(c.Raw); err != nil {
+		return nil, err
+	}
+
+	err = c.DecodeFromBytes(c.Raw)
+	return c, err
 }
 
 func (c *ColibriPathMinimal) Len() int {
@@ -194,4 +215,22 @@ func (c *ColibriPathMinimal) IsLastHop() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// ToColibriPath converts ColibriPathMinimal to a ColibriPath.
+func (c *ColibriPathMinimal) ToColibriPath() (*ColibriPath, error) {
+	if c == nil {
+		return nil, serrors.New("colibri path must not be nil")
+	}
+
+	// Serialize ColibriPathMinimal to ensure potential changes are written to the buffer.
+	if err := c.SerializeToInternal(); err != nil {
+		return nil, err
+	}
+
+	colibriPath := &ColibriPath{}
+	if err := colibriPath.DecodeFromBytes(c.Raw); err != nil {
+		return nil, err
+	}
+	return colibriPath, nil
 }

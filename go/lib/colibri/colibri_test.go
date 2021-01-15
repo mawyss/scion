@@ -34,14 +34,18 @@ func TestStaticMacInputGeneration(t *testing.T) {
 	// TODO
 
 	/*
-	want := []byte(
-		"\x00\x00")
-	s := createScionCmnAddrHdr()
-	c := createColibriPath()
-	got, err := libcolibri.PrepareMacInputStatic(s, c.InfoField, c.HopFields[0])
-	assert.NoError(t, err)
-	assert.Equal(t, want, got)
+		want := []byte(
+			"\x00\x00")
+		s := createScionCmnAddrHdr()
+		c := createColibriPath()
+		got, err := libcolibri.PrepareMacInputStatic(s, c.InfoField, c.HopFields[0])
+		assert.NoError(t, err)
+		assert.Equal(t, want, got)
 	*/
+}
+
+func TestSigmaMacInputGeneration(t *testing.T) {
+	// TODO
 }
 
 func TestPacketMacInputGeneration(t *testing.T) {
@@ -62,7 +66,7 @@ func TestTimestamp(t *testing.T) {
 
 func TestTsRel(t *testing.T) {
 	// expTick encodes the current time plus something between 4 and 8 seconds.
-	expTick := uint32(time.Now().Unix() / 4) + 2
+	expTick := uint32(time.Now().Unix()/4) + 2
 
 	// Incrementing tsRel by one corresponds to adding 4 seconds
 
@@ -114,18 +118,18 @@ func createColibriPath() *colibri.ColibriPath {
 	ts := libcolibri.CreateColibriTimestamp(1, 2, 3)
 	colibripath := &colibri.ColibriPath{
 		PacketTimestamp: ts,
-		InfoField:       &colibri.InfoField{
+		InfoField: &colibri.InfoField{
 			CurrHF:      0,
 			HFCount:     10,
 			ResIdSuffix: randBytes(12),
-			ExpTick:     uint32(time.Now().Unix()/4),
+			ExpTick:     uint32(time.Now().Unix() / 4),
 			BwCls:       randBytes(1)[0],
 			Rlc:         randBytes(1)[0],
 			Ver:         randBytes(1)[0],
 		},
 	}
 	hopfields := make([]*colibri.HopField, 10)
-	for i, _ := range hopfields {
+	for i := range hopfields {
 		hf := &colibri.HopField{
 			IngressId: 1,
 			EgressId:  2,

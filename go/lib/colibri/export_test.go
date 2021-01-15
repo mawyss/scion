@@ -19,10 +19,9 @@ import (
 	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
 )
 
-func PrepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64,
-	inf *colibri.InfoField) ([]byte, error) {
+func PrepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64) ([]byte, error) {
 
-	return prepareMacInputPacket(s, packetTimestamp, inf)
+	return prepareMacInputPacket(s, packetTimestamp)
 }
 
 func PrepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField,
@@ -30,4 +29,3 @@ func PrepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField,
 
 	return prepareMacInputStatic(s, inf, hop)
 }
-

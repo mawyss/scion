@@ -53,3 +53,28 @@ func TestColibriSerializeDecode(t *testing.T) {
 		assert.Equal(t, colMin, colMin2)
 	}
 }
+
+func TestColibriReverse(t *testing.T) {
+	// todo
+	for i := 2; i < 11; i++ {
+		bufferLength := 8 + colibri.LenInfoField + i*colibri.LenHopField
+		buffer := randBytes(uint16(bufferLength))
+		// Set correct number of hop fields
+		buffer[10] = uint8(i - 1)
+		buffer[11] = uint8(i)
+
+		old := &colibri.ColibriPath{}
+		new := &colibri.ColibriPath{}
+		assert.NoError(t, old.DecodeFromBytes(buffer))
+		assert.NoError(t, new.DecodeFromBytes(buffer))
+
+		rev, err := new.Reverse()
+		new = rev.(*colibri.ColibriPath)
+		assert.NoError(t, err)
+
+		assert.Equal(t, old.InfoField.R, !new.InfoField.R)
+		for j := 0; j < i/2+1; j++ {
+			assert.Equal(t, old.HopFields[j], new.HopFields[i-1-j])
+		}
+	}
+}

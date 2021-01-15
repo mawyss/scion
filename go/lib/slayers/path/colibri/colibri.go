@@ -92,6 +92,7 @@ func (c *ColibriPath) SerializeTo(b []byte) error {
 	return nil
 }
 
+// Reverse the path: toggle the R-flag and invert the order of the hop fields.
 func (c *ColibriPath) Reverse() (path.Path, error) {
 	if c == nil {
 		return nil, serrors.New("colibri path must not be nil")
@@ -99,7 +100,13 @@ func (c *ColibriPath) Reverse() (path.Path, error) {
 	if c.InfoField == nil {
 		return nil, serrors.New("the info field must not be nil")
 	}
+
 	c.InfoField.R = !c.InfoField.R
+
+	hf := len(c.HopFields)
+	for i, j := 0, hf-1; i < j; i, j = i+1, j-1 {
+		c.HopFields[i], c.HopFields[j] = c.HopFields[j], c.HopFields[i]
+	}
 	return c, nil
 }
 
