@@ -12,6 +12,8 @@ Header Alignment
 ----------------
 The SCION Header is aligned to 4 bytes.
 
+.. _header-specification_common-header:
+
 Common Header
 -------------
 The Common Header has the following format::
@@ -58,8 +60,7 @@ PathType
     The PathType specifies the SCION path type with up to 256 different types.
     The format of each path type is independent of each other. The initially
     proposed SCION path types are Empty (0), SCION (1), OneHopPath (2), EPIC (3)
-    and COLIBRI (4). Here, we only specify the Empty, SCION and OneHopPath path
-    types.
+    and COLIBRI (4).
 DT/DL/ST/SL
     DT/ST and DL/SL encode host-address type and host-address length,
     respectively, for destination/ source. The possible host address length
@@ -69,6 +70,9 @@ DT/DL/ST/SL
     be padded with zeros.
 RSV
     These bits are currently reserved for future use.
+
+
+.. _header-specification_address-header:
 
 Address Header
 ==============
@@ -250,7 +254,9 @@ ConsIngress, ConsEgress
     The 16-bits ingress/egress interface IDs in construction direction.
 MAC
     6-byte Message Authentication Code to authenticate the hop field. For
-    details on how this MAC is calculated refer to `Hop Field MAC Computation`_.
+    details on how this MAC is calculated refer to :ref:`hop-field-mac-computation`.
+
+.. _hop-field-mac-computation:
 
 Hop Field MAC Computation
 -------------------------
@@ -422,7 +428,7 @@ a forwarding path. Currently, it's only used for bootstrapping beaconing between
 neighboring ASes.
 
 A OneHopPath has exactly one info field and two hop fields with the speciality
-that the second hop field is not known apriori, but is instead created by the
+that the second hop field is not known a priori, but is instead created by the
 corresponding BR upon processing of the OneHopPath::
 
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -731,3 +737,327 @@ packet is dropped.
 
 How to only allow EPIC-HP traffic on a hidden path (and not SCION
 path type packets) is described in the `EPIC design document`_.
+
+Path Type: COLIBRI
+==================
+
+The COLIBRI path type is a bit different than the regular SCION in that it has
+only one info field::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        PacketTimestamp                        |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                                                               |
+    |                           InfoField                           |
+    |                                                               |
+    |                                                               |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           HopField                            |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                           HopField                            |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                              ...                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+The sizes of the packet timestamp, the info field and the individual hop fields
+are fixed and the fields always exist, although the number of hop fields
+is variable.
+
+Packet Timestamp
+----------------
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             TsRel                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                             PckId                             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Both fields ``TsRel`` and ``PckId`` contain arbitrary data when ``C=1``
+(defined in the InfoField).
+This is so because these fields are only used for E2E data plane traffic,
+which means ``C=0``; thus they only need to be set for ``C=0``.
+
+TsRel
+  A 4-byte timestamp relative to the Expiration Tick in the InfoField minus 16
+  seconds.
+  TsRel is calculated by the source host as follows:
+
+.. math::
+    \begin{align}
+        \text{Timestamp}_{ns} &= (4\times \text{ExpirationTick} - 16)
+            \times 10^9 \\
+        \text{Ts} &= \text{current unix timestamp [ns]}  \\
+        \text{q} &= \left\lceil\left(\frac{16
+            \times 10^9}{2^{32}}\right)\right\rceil\text{ns}
+            = \text{4 ns}\\
+        \text{TsRel} &= \text{max} \left\{0,
+            \frac{\text{Ts - Timestamp}_{ns}}
+            {\text{q}} -1 \right\} \\
+        \textit{Get back the time when }&\textit{the packet
+        was timestamped:} \\
+        \text{Ts} &= \text{Timestamp}_{ns} + (1 + \text{TsRel})
+            \times \text{q}
+    \end{align}
+
+TsRel has a precision of :math:`\text{4 ns}` and covers at least
+17 seconds. When sending packets at high speeds
+(more than one packet every :math:`\text{4 ns}`) or when using
+multiple cores, collisions may occur in TsRel. To solve this
+problem, the source further identifies the packet using PckId.
+
+PckId
+  A 4-byte identifier that allows to distinguish two packets with
+  the same TsRel. Every source is free to set PckId arbitrarily, but
+  we recommend to use the following structure:
+
+::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |    CoreID     |                  CoreCounter                  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+CoreID
+  Unique identifier representing one of the cores of the source host.
+
+CoreCounter
+  Current value of the core counter belonging to the core specified
+  by CoreID. Every time a core sends a COLIBRI packet, it increases
+  its core counter (modular addition by 1).
+
+Note that the Packet Timestamp is at the very beginning of the
+header, this allows other components (like the replay suppression
+system) to access it without having to go through any parsing
+overhead.
+
+Info Field
+----------
+The only info field has the following format::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |C R S r r r r r r r r r r r r r|     CurrHF    |    HFCount    |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                     Reservation ID Suffix                     |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                        Expiration Tick                        |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |      BWCls    |      RLC      |  Ver  |r r r r r r r r r r r r|
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+r
+    Unused and reserved for future use.
+
+(C)ontrol
+    This is a control plane packet. On each border router it will be
+    forwarded to the COLIBRI anycast address.
+(R)everse
+    This packet travels in the reverse direction of the reservation.
+    If `R` is set, `C` must be set as well. Otherwise the packet is invalid.
+    This flag is set every time the COLIBRI service sends back a response.
+(S)egment Reservation
+    This is a Segment Reservation Packet.
+    If `S` is set, `C` must be set as well. Otherwise the packet is invalid.
+    This flag is set every time the Reservation ID is of type Segment ID.
+CurrHF
+    The index of the current HopField.
+HFCount
+    The number of total HopFields.
+Reservation ID Suffix
+    Uses 12 bytes. Either an E2E Reservation ID suffix or a
+    Segment Reservation ID suffix,
+    depending on `S`. If :math:`S=1`, the Segment Reservation ID suffix
+    is padded with zeroes until using all 12 bytes. If :math:`S=0`
+    the 12 bytes from the E2E Reservation ID suffix are included.
+Expiration Tick
+    The value represents the "tick" where this packet is no longer valid.
+    A tick is four seconds, so :math:`\text{Expiration Time} = 4 \times
+    \text{Expiration Tick}` seconds after Unix epoch.
+BWCls
+    The bandwidth class this reservation has.
+RLC
+    The Request Latency Class this reservation has.
+Ver
+    The version of this reservation.
+
+Reservation ID Reconstruction
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The reservation ID is encoded in two parts in the packet header.
+
+- The ASID, which is always the initial part of the ID, is encoded in the
+  regular SCION address header, either at the `SrcAS` or the `DstAS` field.
+- The suffix is present in the `Reservation ID Suffix` field.
+
+The process of reconstructing the reservation ID is simple. It depends
+on the value of ``R`` and ``S``:
+
+.. code-block::
+
+    var ASID [6]byte
+    var Suffix []byte
+    if R == 0 {
+        ASID = AddressHeader.SrcAS
+    } else {
+        ASID = AddressHeader.DstAS
+    }
+    if S == 0 {
+        Suffix = InfoField.IDSuffix
+    } else {
+        Suffix = InfoField.IDSuffix[:4]
+    }
+    ReservationID = append(ASID, Suffix)
+
+These steps need only to be carried out by entities that need the
+complete reservation ID, which excludes the border router
+(which only needs to derive the correct ASID using ``R``).
+
+
+Hop Field
+---------
+The Hop Field has the following format::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |        Ingress ID             |         Egress ID             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                              MAC                              |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Hop fields appear in the forwarding order.
+
+
+Hop Field MAC Computation
+-------------------------
+There is a explanation about the rationale of the MAC computation on
+:ref:`colibri-mac-computation`.
+Here we only detail how to perform the two different MAC computations.
+The two different MAC flavors are the *static MAC* and the *per-packet MAC*
+(also known as *HVF*).
+
+The `InputData` is common for both types::
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                        Reservation ID                         |
+    |                                                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                      Expiration Tick                          |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |      BWCls    |      RLC      |     HFCount   |  Ver  |C|  0  |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |            Ingress            |            Egress             |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                                                               |
+    |                 ASID          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |                               |
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Most of the fields come from the COLIBRI *InfoField*,
+with the exception of *Ingress* and *Egress* that come from the *HopField*,
+and ``ASID``, which was used to derive the
+full reservation ID. Depending on the value of ``R``, is derived as:
+
+.. code-block::
+
+    var ASID [6]byte
+    if R == 0 {
+        ASID = AddressHeader.SrcAS
+    } else {
+        ASID = AddressHeader.DstAS
+    }
+
+When ``C=1`` we compute the *static MAC*:
+
+.. math::
+    \text{MAC}_i^{C=1} \equiv \text{MAC}_{K_i} (\text{InputData})
+
+When ``C=0`` we have :math:`\text{MAC}_{i}^{C=0}` which is also called
+:math:`\sigma_i`:
+
+.. math::
+    \sigma_i = \text{MAC}_{K_i}(InputData, DT, DL, ST, SL,
+      SrcHostAddr, DstHostAddr)
+
+(SrcHostAddr and DstHostAddr are defined in the
+:ref:`header-specification_address-header`,
+SL, DL, ST and DT defined in the
+:ref:`header-specification_common-header`,
+both present in every SCION packet).
+
+In the case of ``C=0``, we want to use the :math:`\sigma_i` defined above
+to compute the *per-packet MAC*,
+also known as HopField Validation Field (*HVF*):
+
+.. math::
+    \text{HVF}_i = \text{MAC}_{\sigma_i}(\text{TS}, \text{packet_length})
+
+With:
+
+TS
+    The Timestamp described on `packet timestamp`_.
+packet_length
+    The length of the packet.
+
+The per packet MACs (or *HVFs*) are used only when ``C=0``, which implies
+that the other two flags are also not set (``R=0, S=0``). The computation of
+the HVFs for all HopFields happens at the *stamping* service in the source AS,
+and they are verified at each transit AS, one HVF per transit AS.
+
+
+.. _colibri-forwarding-process:
+
+Forwarding Process
+------------------
+There is a unique way of forwarding a COLIBRI packet, regardless of
+whether it is control plane or data plane.
+This should simplify the design and implementation of the COLIBRI
+part in the border router.
+There are, though, slight modifications on the forward process depending
+on the ``C`` and ``R`` flags, as is noted below.
+
+The validation process checks that all of the following conditions are true:
+
+- The time derived from the expiration tick is less than the current time.
+- The consistency of the flags: if `R` or `S` are set, `C` must be set.
+- HFCount is at least 2, :math:`\text{HFCount} \geq 2`.
+- The `CurrHF` is not beyond bounds.
+  I.e. :math:`\text{CurrHF} \lt \text{HFCount}`
+
+If the packet is valid, we continue to validate the current Hop Field.
+Depending on ``R``, ingress and egress in the packet actually represent
+the opposite (for forwarding purposes).
+The current hop field is located at
+`Offset(COLIBRI_header) + Len(TS) + Len(InfoField) + CurrHF` :math:`\times 8`:
+
+- Its `Ingress ID` field is checked against the actual ingress interface.
+- Its MAC is computed according to :ref:`colibri-mac-computation`
+  and checked against the `MAC` field. If ``C=0`` the *HVF* is computed and
+  checked instead of the *static MAC*.
+
+If the packet is valid:
+
+- If `C = 1`, the packet is delivered to the local COLIBRI anycast address.
+- If `C = 0` and this AS is the destination AS (last hop):
+  - Check `DestIA` against this IA.
+- If `C = 0` and this AS is not the destination:
+
+  - Its `CurrHF` field is incremented by 1 if
+    :math:`\text{CurrHF} \lt \sum_{i=0}^2 SegLen_i - 1`.
+  - It is forwarded to its `Egress ID` interface.

@@ -19,7 +19,7 @@ is a good place to start.
    PathPolicy
    hidden-paths
    EPIC
-   ColibriService
+   ColibriDesign
    uri
    grpc
 
