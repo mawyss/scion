@@ -40,7 +40,7 @@ type colibriPacketProcessor struct {
 	// buffer is the buffer that can be used to serialize gopacket layers.
 	buffer gopacket.SerializeBuffer
 
-	// hopField is the current hopField field, is updated during processing.
+	// colibriPathMinimal is the optimized representation of the colibri path type.
 	colibriPathMinimal *colibri.ColibriPathMinimal
 }
 
@@ -79,7 +79,7 @@ func (c *colibriPacketProcessor) forward() (processResult, error) {
 	// Received packet from outside of the AS
 	if c.colibriPathMinimal.InfoField.C {
 		// Control plane forwarding
-		// TODO: can there be multiple colibri services? (may need to select one deterministically?)
+		// Assumption: in case there are multiple COLIBRI services, they are always synchronized
 		return c.forwardToColibriSvc()
 	} else {
 		// Data plane forwarding
@@ -104,10 +104,10 @@ func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
 		return processResult{}, serrors.New("invalid flags", "S", S, "R", R, "C", C)
 	}
 	// Correct ingress interface
-	if R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId {
+	if R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId {
 		return processResult{}, serrors.New("invalid ingress identifier")
 	}
-	if !R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId {
+	if !R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId {
 		return processResult{}, serrors.New("invalid ingress identifier")
 	}
 	// Valid packet length
@@ -127,21 +127,31 @@ func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
 			"currHF", currHF, "hfCount", hfCount)
 	}
 
-	// Packet freshness
+	// Reservation not expired
 	expTick := c.colibriPathMinimal.InfoField.ExpTick
-	timestamp := c.colibriPathMinimal.PacketTimestamp
-	isFresh := libcolibri.VerifyTimestamp(expTick, timestamp)
-	if !isFresh {
-		return processResult{}, serrors.New("verification of packet timestamp failed")
+	notExpired := libcolibri.VerifyExpirationTick(expTick)
+	if !notExpired {
+		return processResult{}, serrors.New("packet expired")
+	}
+
+	// Packet freshness
+	if !C {
+		timestamp := c.colibriPathMinimal.PacketTimestamp
+		isFresh := libcolibri.VerifyTimestamp(expTick, timestamp)
+		if !isFresh {
+			return processResult{}, serrors.New("verification of packet timestamp failed")
+		}
 	}
 
 	return processResult{}, nil
 }
 
 func (c *colibriPacketProcessor) cryptographicValidation() (processResult, error) {
-
-	// TODO: MAC computation
-	return processResult{}, nil
+	privateKey := c.d.ColibriKey
+	colHeader := c.colibriPathMinimal
+	err := libcolibri.VerifyMAC(privateKey, colHeader.PacketTimestamp, colHeader.InfoField,
+		colHeader.CurrHopField, &c.scionLayer)
+	return processResult{}, err
 }
 
 func (c *colibriPacketProcessor) getPath() (processResult, error) {
@@ -232,7 +242,7 @@ func (c *colibriPacketProcessor) destinedToLocalHost(egressId uint16) bool {
 
 // For the colibri data plane
 func (c *colibriPacketProcessor) forwardToLocalHost() (processResult, error) {
-	// Inbound: packet destined to the local IA.
+	// Inbound: packet destined to a host in the local IA.
 	a, err := c.d.resolveLocalDst(c.scionLayer)
 	if err != nil {
 		return processResult{}, err
@@ -243,7 +253,8 @@ func (c *colibriPacketProcessor) forwardToLocalHost() (processResult, error) {
 func (c *colibriPacketProcessor) forwardToColibriSvc() (processResult, error) {
 	// Inbound: packet destined to the local colibri service.
 
-	// Get address of colibri service
+	// Get address of colibri service (pick one at random if there are multiple COLIBRI services)
+	// Assumption: in case there are multiple COLIBRI services, they are always synchronized
 	a, ok := c.d.svc.Any(addr.SvcCOL.Base())
 	if !ok {
 		return processResult{}, serrors.New("no colibri service registered at border router")

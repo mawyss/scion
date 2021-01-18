@@ -118,6 +118,13 @@ func CreateTsRel(expirationTick uint32) (uint32, error) {
 	return uint32(tsRel), nil
 }
 
+// VerifyExpirationTick returns whether the expiration time has not been reached yet.
+func VerifyExpirationTick(expirationTick uint32) bool {
+	expTime := 4 * int64(expirationTick)
+	now := time.Now().Unix()
+	return now >= expTime
+}
+
 // VerifyTimestamp checks whether a COLIBRI packet is fresh. This means that the time the packet
 // was sent from the source host, which is encoded by the expiration tick and the packetTimestamp,
 // does not date back more than the maximal packet lifetime of two seconds. The function also takes
@@ -137,6 +144,38 @@ func VerifyTimestamp(expirationTick uint32, packetTimestamp uint64) bool {
 	} else {
 		return true
 	}
+}
+
+// VerifyMAC verifies the authenticity of the MAC in the colibri hop field. If the MAC is correct,
+// nil is returned, otherwise VerifyMAC returns an error.
+func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField,
+	currHop *colibri.HopField, s *slayers.SCION) error {
+
+	var mac []byte
+	var err error
+
+	switch inf.C {
+	case true:
+		mac, err = CalculateColibriMacStatic(privateKey, inf, currHop, s)
+		if err != nil {
+			return err
+		}
+	case false:
+		auth, err := CalculateColibriMacSigma(privateKey, inf, currHop, s)
+		if err != nil {
+			return err
+		}
+		mac, err = CalculateColibriMacPacket(auth, s, packetTimestamp, inf)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !bytes.Equal(mac[:4], currHop.Mac[:4]) {
+		return serrors.New("colibri mac verification failed")
+	}
+
+	return nil
 }
 
 // CalculateColibriMacStatic calculates the static colibri MAC.
@@ -188,9 +227,6 @@ func CalculateColibriMacSigma(privateKey []byte, inf *colibri.InfoField,
 func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64,
 	inf *colibri.InfoField) ([]byte, error) {
 
-	// TODO: authenticate the whole packet size or only payload?
-	// payload should be enough, because HFCount in the info field is authenticated anyway.
-
 	// Initialize cryptographic MAC function
 	f, err := initColibriMac(auth)
 	if err != nil {
@@ -209,33 +245,6 @@ func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp ui
 	mac := make([]byte, len(input))
 	f.CryptBlocks(mac, input)
 	return mac[len(mac)-16 : len(mac)-12], nil
-}
-
-// VerifyMAC verifies the authenticity of the MAC in the colibri hop field.
-func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField,
-	currHop *colibri.HopField, s *slayers.SCION) (bool, error) {
-
-	var mac []byte
-	var err error
-
-	switch inf.C {
-	case true:
-		mac, err = CalculateColibriMacStatic(privateKey, inf, currHop, s)
-		if err != nil {
-			return false, err
-		}
-	case false:
-		auth, err := CalculateColibriMacSigma(privateKey, inf, currHop, s)
-		if err != nil {
-			return false, err
-		}
-		mac, err = CalculateColibriMacPacket(auth, s, packetTimestamp, inf)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return bytes.Equal(mac[:4], currHop.Mac[:4]), nil
 }
 
 func initColibriMac(key []byte) (cipher.BlockMode, error) {

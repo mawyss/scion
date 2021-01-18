@@ -32,7 +32,8 @@ const (
 )
 
 var (
-	hfMacSalt = []byte("Derive OF Key")
+	hfMacSalt   = []byte("Derive OF Key")
+	ColibriSalt = []byte("Derive Colibri Key")
 )
 
 func InitMac(key []byte) (hash.Hash, error) {
@@ -62,4 +63,14 @@ func HFMacFactory(key []byte) (func() hash.Hash, error) {
 		return mac
 	}
 	return f, nil
+}
+
+// DeriveColibriKey derives the private Colibri key from the given key.
+func DeriveColibriKey(k []byte) []byte {
+	if len(k) == 0 {
+		panic("empty key")
+	}
+	// This uses 16B keys with 1000 hash iterations, which is the same as the
+	// defaults used by pycrypto.
+	return pbkdf2.Key(k, ColibriSalt, 1000, 16, sha256.New)
 }
