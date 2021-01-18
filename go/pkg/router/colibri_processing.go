@@ -65,33 +65,14 @@ func (c *colibriPacketProcessor) process() (processResult, error) {
 	return c.forward()
 }
 
-func (c *colibriPacketProcessor) forward() (processResult, error) {
-	egressId, err := c.egressInterface()
-	if err != nil {
-		return processResult{}, err
+func (c *colibriPacketProcessor) getPath() (processResult, error) {
+	var ok bool
+	c.colibriPathMinimal, ok = c.scionLayer.Path.(*colibri.ColibriPathMinimal)
+	if !ok {
+		return processResult{}, serrors.New("getting minimal colibri path information failed")
 	}
+	return processResult{}, nil
 
-	if c.ingressID == 0 {
-		// Received packet from within AS
-		return c.forwardToLocalEgress(egressId)
-	}
-
-	// Received packet from outside of the AS
-	if c.colibriPathMinimal.InfoField.C {
-		// Control plane forwarding
-		// Assumption: in case there are multiple COLIBRI services, they are always synchronized
-		return c.forwardToColibriSvc()
-	} else {
-		// Data plane forwarding
-		if c.destinedToLocalHost(egressId) {
-			return c.forwardToLocalHost()
-		} else {
-			if r, err := c.forwardToLocalEgress(egressId); err == nil {
-				return r, err
-			}
-			return c.forwardToRemoteEgress(egressId)
-		}
-	}
 }
 
 func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
@@ -154,14 +135,33 @@ func (c *colibriPacketProcessor) cryptographicValidation() (processResult, error
 	return processResult{}, err
 }
 
-func (c *colibriPacketProcessor) getPath() (processResult, error) {
-	var ok bool
-	c.colibriPathMinimal, ok = c.scionLayer.Path.(*colibri.ColibriPathMinimal)
-	if !ok {
-		return processResult{}, serrors.New("getting minimal colibri path information failed")
+func (c *colibriPacketProcessor) forward() (processResult, error) {
+	egressId, err := c.egressInterface()
+	if err != nil {
+		return processResult{}, err
 	}
-	return processResult{}, nil
 
+	if c.ingressID == 0 {
+		// Received packet from within AS
+		return c.forwardToLocalEgress(egressId)
+	}
+
+	// Received packet from outside of the AS
+	if c.colibriPathMinimal.InfoField.C {
+		// Control plane forwarding
+		// Assumption: in case there are multiple COLIBRI services, they are always synchronized
+		return c.forwardToColibriSvc()
+	} else {
+		// Data plane forwarding
+		if c.destinedToLocalHost(egressId) {
+			return c.forwardToLocalHost()
+		} else {
+			if r, err := c.forwardToLocalEgress(egressId); err == nil {
+				return r, err
+			}
+			return c.forwardToRemoteEgress(egressId)
+		}
+	}
 }
 
 func (c *colibriPacketProcessor) egressInterface() (uint16, error) {
@@ -229,12 +229,6 @@ func (c *colibriPacketProcessor) forwardToRemoteEgress(egressId uint16) (process
 	}
 }
 
-func (c *colibriPacketProcessor) destinedToLocalHost(egressId uint16) bool {
-	isLast, _ := c.colibriPathMinimal.IsLastHop()
-	return c.scionLayer.DstIA.Equal(c.d.localIA) && egressId == 0 && isLast
-}
-
-// For the colibri data plane
 func (c *colibriPacketProcessor) forwardToLocalHost() (processResult, error) {
 	// Inbound: packet destined to a host in the local IA.
 	a, err := c.d.resolveLocalDst(c.scionLayer)
@@ -254,4 +248,9 @@ func (c *colibriPacketProcessor) forwardToColibriSvc() (processResult, error) {
 		return processResult{}, serrors.New("no colibri service registered at border router")
 	}
 	return processResult{OutConn: c.d.internal, OutAddr: a, OutPkt: c.rawPkt}, nil
+}
+
+func (c *colibriPacketProcessor) destinedToLocalHost(egressId uint16) bool {
+	isLast, _ := c.colibriPathMinimal.IsLastHop()
+	return c.scionLayer.DstIA.Equal(c.d.localIA) && egressId == 0 && isLast
 }
