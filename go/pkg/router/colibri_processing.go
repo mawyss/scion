@@ -172,9 +172,6 @@ func (c *colibriPacketProcessor) egressInterface() (uint16, error) {
 		return 0, serrors.New("colibri path must not be nil")
 	}
 	if c.colibriPathMinimal.CurrHopField == nil {
-		return 0, serrors.New("colibri info field must not be nil")
-	}
-	if c.colibriPathMinimal.CurrHopField == nil {
 		return 0, serrors.New("colibri hop field must not be nil")
 	}
 
@@ -191,9 +188,6 @@ func (c *colibriPacketProcessor) ingressInterface() (uint16, error) {
 	}
 	if c.colibriPathMinimal == nil {
 		return 0, serrors.New("colibri path must not be nil")
-	}
-	if c.colibriPathMinimal.CurrHopField == nil {
-		return 0, serrors.New("colibri info field must not be nil")
 	}
 	if c.colibriPathMinimal.CurrHopField == nil {
 		return 0, serrors.New("colibri hop field must not be nil")
