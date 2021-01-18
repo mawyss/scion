@@ -95,6 +95,7 @@ type DataPlane struct {
 	internalNextHops map[uint16]net.Addr
 	svc              *services
 	macFactory       func() hash.Hash
+	ColibriKey       []byte
 	bfdSessions      map[uint16]bfdSession
 	localIA          addr.IA
 	mtx              sync.Mutex
@@ -164,6 +165,25 @@ func (d *DataPlane) SetKey(key []byte) error {
 		mac, _ := scrypto.InitMac(key)
 		return mac
 	}
+	return nil
+}
+
+// SetColibriKey sets the key used for Colibri MAC verification. The key provided here should
+// already be derived as in scrypto.HFMacFactory.
+func (d *DataPlane) SetColibriKey(key []byte) error {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	if d.running {
+		return modifyExisting
+	}
+	if len(key) == 0 {
+		return emptyValue
+	}
+	if len(d.ColibriKey) != 0 {
+		return alreadySet
+	}
+
+	d.ColibriKey = key
 	return nil
 }
 
