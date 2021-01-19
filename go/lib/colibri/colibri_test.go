@@ -26,30 +26,57 @@ import (
 	libcolibri "github.com/scionproto/scion/go/lib/colibri"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
-	"github.com/scionproto/scion/go/lib/slayers/path/scion"
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
 func TestStaticMacInputGeneration(t *testing.T) {
-	// TODO
+	want := []byte{0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0x0, 0x0, 0x12,
+		0x34, 0x12, 0x34, 0xa, 0x60, 0x0, 0x1, 0x0, 0x2, 0xff, 0x0, 0x0, 0x0, 0x2, 0x22, 0x0, 0x0}
+	
+	s := createScionCmnAddrHdr()
+	c := createColibriPath()
+	c.InfoField.ResIdSuffix = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+		0x0a, 0x0b}
+	c.InfoField.ExpTick = 0x1234
+	c.InfoField.BwCls = 0x12
+	c.InfoField.Rlc = 0x34
+	c.InfoField.Ver = 0x6
 
-	/*
-		want := []byte(
-			"\x00\x00")
-		s := createScionCmnAddrHdr()
-		c := createColibriPath()
-		got, err := libcolibri.PrepareMacInputStatic(s, c.InfoField, c.HopFields[0])
-		assert.NoError(t, err)
-		assert.Equal(t, want, got)
-	*/
+	got, err := libcolibri.PrepareMacInputStatic(s, c.InfoField, c.HopFields[0])
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
 
 func TestSigmaMacInputGeneration(t *testing.T) {
-	// TODO
+	want := []byte{0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0x12, 0x34, 0x56,
+		0x78, 0x12, 0x34, 0xa, 0x60, 0x0, 0x1, 0x0, 0x2, 0xff, 0x0, 0x0, 0x0, 0x2, 0x22, 0x44, 0xa,
+		0x0, 0x0, 0x64, 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	
+	s := createScionCmnAddrHdr()
+	c := createColibriPath()
+	c.InfoField.ResIdSuffix = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+		0x0a, 0x0b}
+	c.InfoField.ExpTick = 0x12345678
+	c.InfoField.BwCls = 0x12
+	c.InfoField.Rlc = 0x34
+	c.InfoField.Ver = 0x6
+
+	got, err := libcolibri.PrepareMacInputSigma(s, c.InfoField, c.HopFields[0])
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
 
 func TestPacketMacInputGeneration(t *testing.T) {
-	// TODO
+	want := []byte{0x12, 0x34, 0x56, 0x78, 0x7, 0x0, 0x4, 0x1, 0x0,
+		0x78, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
+	
+	s := createScionCmnAddrHdr()
+	var tsRel uint32 = 0x12345678
+	packetTimestamp := libcolibri.CreateColibriTimestamp(tsRel, 7, 1025)
+
+	got, err := libcolibri.PrepareMacInputPacket(s, packetTimestamp)
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
 
 func TestTimestamp(t *testing.T) {
@@ -64,14 +91,11 @@ func TestTimestamp(t *testing.T) {
 	}
 }
 
-func TestTsRel(t *testing.T) {
+func TestCreateTsRel(t *testing.T) {
 	// expTick encodes the current time plus something between 4 and 8 seconds.
 	expTick := uint32(time.Now().Unix()/4) + 2
 
-	// Incrementing tsRel by one corresponds to adding 4 seconds
-
-	// TODO: check this test
-
+	// Incrementing/decrementing tsRel by one corresponds to adding/subtracting 4 seconds
 	testCases := map[uint32]bool{
 		0:           false,
 		expTick - 2: false,
@@ -81,8 +105,8 @@ func TestTsRel(t *testing.T) {
 		expTick + 2: true,
 		expTick + 3: false,
 	}
-	for tsRel, want := range testCases {
-		_, err := libcolibri.CreateTsRel(tsRel)
+	for expTick, want := range testCases {
+		_, err := libcolibri.CreateTsRel(expTick)
 		if want == true {
 			assert.NoError(t, err)
 		} else {
@@ -92,25 +116,97 @@ func TestTsRel(t *testing.T) {
 }
 
 func TestTimestampVerification(t *testing.T) {
+	// expTick encodes the current time plus something between 8 and 12 seconds.
+	expTick := uint32(time.Now().Unix()/4) + 3
 
+	tsRel, err := libcolibri.CreateTsRel(expTick)
+	assert.NoError(t, err)
+	var stepsPerSecond uint32 = 250000000 // 1 step corresponds to 4ns
+
+	testCases := map[uint32]bool{
+		tsRel+(stepsPerSecond*3/2): false,
+		tsRel+(stepsPerSecond/2):   true,
+		tsRel:                      true,
+		tsRel-(stepsPerSecond/2):   true,
+		tsRel-(stepsPerSecond*3/2): true,
+		tsRel-(stepsPerSecond*5/2): true,
+		tsRel-(stepsPerSecond*7/2): false,
+	}
+
+	for tsRel, want := range testCases {
+		packetTimestamp := libcolibri.CreateColibriTimestamp(tsRel, 0, 0)
+		assert.Equal(t, libcolibri.VerifyTimestamp(expTick, packetTimestamp), want)
+	}
 }
 
 func TestStaticHVFVerification(t *testing.T) {
+	s := createScionCmnAddrHdr()
+	c := createColibriPath()
 
+	c.InfoField.C = true
+	for i := 1; i <= 10; i++ {
+		// Generate MAC
+		privateKey := randBytes(16)
+		mac, err := libcolibri.CalculateColibriMacStatic(privateKey, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.NoError(t, err)
+		c.HopFields[c.InfoField.CurrHF].Mac = mac
+
+		// Verify MAC correctly
+		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.NoError(t, err)
+
+		// Verify MAC with wrong key
+		privateKey = randBytes(16)
+		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.Error(t, err)
+	}
 }
 
 func TestPacketHVFVerification(t *testing.T) {
+	s := createScionCmnAddrHdr()
+	c := createColibriPath()
 
+	c.InfoField.C = false
+	for i := 1; i <= 10; i++ {
+		// Generate MAC
+		privateKey := randBytes(16)
+		auth, err := libcolibri.CalculateColibriMacSigma(privateKey, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.NoError(t, err)
+		mac, err := libcolibri.CalculateColibriMacPacket(auth, s, c.PacketTimestamp, c.InfoField)
+		assert.NoError(t, err)
+		c.HopFields[c.InfoField.CurrHF].Mac = mac
+
+		// Verify MAC correctly
+		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.NoError(t, err)
+
+		// Verify MAC with wrong key
+		privateKey = randBytes(16)
+		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+			c.HopFields[c.InfoField.CurrHF], s)
+		assert.Error(t, err)
+	}
 }
 
 func createScionCmnAddrHdr() *slayers.SCION {
 	spkt := &slayers.SCION{
-		SrcAddrLen: 0,
-		SrcIA:      xtest.MustParseIA("2-ff00:0:222"),
-		PayloadLen: 120,
+		SrcIA:       xtest.MustParseIA("2-ff00:0:222"),
+		PayloadLen:  120,
 	}
-	ip4Addr := &net.IPAddr{IP: net.ParseIP("10.0.0.100")}
-	spkt.SetSrcAddr(ip4Addr)
+	ip4AddrSrc := &net.IPAddr{IP: net.ParseIP("10.0.0.100")}
+	ip4AddrDst := &net.IPAddr{IP: net.ParseIP("1.2.3.4")}
+	spkt.SetSrcAddr(ip4AddrSrc)
+	spkt.SetDstAddr(ip4AddrDst)
+
+	spkt.DstAddrType = slayers.T4Svc
+	spkt.DstAddrLen = slayers.AddrLen4
+	spkt.SrcAddrType = slayers.T4Svc
+	spkt.SrcAddrLen = slayers.AddrLen4
 	return spkt
 }
 
@@ -139,18 +235,6 @@ func createColibriPath() *colibri.ColibriPath {
 	}
 	colibripath.HopFields = hopfields
 	return colibripath
-}
-
-func createScionPath(currHF uint8, numHops int) *scion.Raw {
-	scionRaw := &scion.Raw{
-		Base: scion.Base{
-			PathMeta: scion.MetaHdr{
-				CurrHF: currHF,
-			},
-			NumHops: numHops,
-		},
-	}
-	return scionRaw
 }
 
 func randUint64() uint64 {

@@ -55,7 +55,6 @@ func TestColibriSerializeDecode(t *testing.T) {
 }
 
 func TestColibriReverse(t *testing.T) {
-	// todo
 	for i := 2; i < 11; i++ {
 		bufferLength := 8 + colibri.LenInfoField + i*colibri.LenHopField
 		buffer := randBytes(uint16(bufferLength))
@@ -76,5 +75,8 @@ func TestColibriReverse(t *testing.T) {
 		for j := 0; j < i/2+1; j++ {
 			assert.Equal(t, old.HopFields[j], new.HopFields[i-1-j])
 		}
+
+		revrev, err := rev.Reverse()
+		assert.Equal(t, revrev, old)
 	}
 }

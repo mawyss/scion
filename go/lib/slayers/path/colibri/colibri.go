@@ -92,7 +92,7 @@ func (c *ColibriPath) SerializeTo(b []byte) error {
 	return nil
 }
 
-// Reverse the path: toggle the R-flag and invert the order of the hop fields.
+// Reverse the path: toggle the R-flag, invert the order of the hop fields, and adapt the CurrHF.
 func (c *ColibriPath) Reverse() (path.Path, error) {
 	if c == nil {
 		return nil, serrors.New("colibri path must not be nil")
@@ -102,12 +102,14 @@ func (c *ColibriPath) Reverse() (path.Path, error) {
 	}
 
 	c.InfoField.R = !c.InfoField.R
+	c.InfoField.CurrHF = c.InfoField.HFCount - c.InfoField.CurrHF
 
 	hf := len(c.HopFields)
 	for i, j := 0, hf-1; i < j; i, j = i+1, j-1 {
 		c.HopFields[i], c.HopFields[j] = c.HopFields[j], c.HopFields[i]
 	}
-	return c, nil
+
+	return c, nil	
 }
 
 func (c *ColibriPath) Len() int {
