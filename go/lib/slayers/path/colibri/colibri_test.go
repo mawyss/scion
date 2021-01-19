@@ -76,7 +76,8 @@ func TestColibriReverse(t *testing.T) {
 			assert.Equal(t, old.HopFields[j], new.HopFields[i-1-j])
 		}
 
-		revrev, err := rev.Reverse()
+		revrev, err2 := rev.Reverse()
+		assert.NoError(t, err2)
 		assert.Equal(t, revrev, old)
 	}
 }

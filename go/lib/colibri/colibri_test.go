@@ -32,7 +32,7 @@ import (
 func TestStaticMacInputGeneration(t *testing.T) {
 	want := []byte{0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0x0, 0x0, 0x12,
 		0x34, 0x12, 0x34, 0xa, 0x60, 0x0, 0x1, 0x0, 0x2, 0xff, 0x0, 0x0, 0x0, 0x2, 0x22, 0x0, 0x0}
-	
+
 	s := createScionCmnAddrHdr()
 	c := createColibriPath()
 	c.InfoField.ResIdSuffix = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
@@ -51,7 +51,7 @@ func TestSigmaMacInputGeneration(t *testing.T) {
 	want := []byte{0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0x12, 0x34, 0x56,
 		0x78, 0x12, 0x34, 0xa, 0x60, 0x0, 0x1, 0x0, 0x2, 0xff, 0x0, 0x0, 0x0, 0x2, 0x22, 0x44, 0xa,
 		0x0, 0x0, 0x64, 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	
+
 	s := createScionCmnAddrHdr()
 	c := createColibriPath()
 	c.InfoField.ResIdSuffix = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
@@ -69,7 +69,7 @@ func TestSigmaMacInputGeneration(t *testing.T) {
 func TestPacketMacInputGeneration(t *testing.T) {
 	want := []byte{0x12, 0x34, 0x56, 0x78, 0x7, 0x0, 0x4, 0x1, 0x0,
 		0x78, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
-	
+
 	s := createScionCmnAddrHdr()
 	var tsRel uint32 = 0x12345678
 	packetTimestamp := libcolibri.CreateColibriTimestamp(tsRel, 7, 1025)
@@ -124,13 +124,13 @@ func TestTimestampVerification(t *testing.T) {
 	var stepsPerSecond uint32 = 250000000 // 1 step corresponds to 4ns
 
 	testCases := map[uint32]bool{
-		tsRel+(stepsPerSecond*3/2): false,
-		tsRel+(stepsPerSecond/2):   true,
-		tsRel:                      true,
-		tsRel-(stepsPerSecond/2):   true,
-		tsRel-(stepsPerSecond*3/2): true,
-		tsRel-(stepsPerSecond*5/2): true,
-		tsRel-(stepsPerSecond*7/2): false,
+		tsRel + (stepsPerSecond * 3 / 2): false,
+		tsRel + (stepsPerSecond / 2):     true,
+		tsRel:                            true,
+		tsRel - (stepsPerSecond / 2):     true,
+		tsRel - (stepsPerSecond * 3 / 2): true,
+		tsRel - (stepsPerSecond * 5 / 2): true,
+		tsRel - (stepsPerSecond * 7 / 2): false,
 	}
 
 	for tsRel, want := range testCases {
@@ -195,8 +195,8 @@ func TestPacketHVFVerification(t *testing.T) {
 
 func createScionCmnAddrHdr() *slayers.SCION {
 	spkt := &slayers.SCION{
-		SrcIA:       xtest.MustParseIA("2-ff00:0:222"),
-		PayloadLen:  120,
+		SrcIA:      xtest.MustParseIA("2-ff00:0:222"),
+		PayloadLen: 120,
 	}
 	ip4AddrSrc := &net.IPAddr{IP: net.ParseIP("10.0.0.100")}
 	ip4AddrDst := &net.IPAddr{IP: net.ParseIP("1.2.3.4")}

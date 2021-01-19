@@ -109,7 +109,7 @@ func (c *ColibriPath) Reverse() (path.Path, error) {
 		c.HopFields[i], c.HopFields[j] = c.HopFields[j], c.HopFields[i]
 	}
 
-	return c, nil	
+	return c, nil
 }
 
 func (c *ColibriPath) Len() int {
