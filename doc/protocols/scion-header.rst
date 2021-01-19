@@ -867,8 +867,6 @@ r
     forwarded to the COLIBRI anycast address.
 (R)everse
     This packet travels in the reverse direction of the reservation.
-    If `R` is set, `S` must not be set. Otherwise the packet is invalid.
-    This flag is set every time the COLIBRI service sends back a response.
 (S)egment Reservation
     This is a Segment Reservation Packet.
     If `S` is set, `C` must be set as well. Otherwise the packet is invalid.
@@ -1041,8 +1039,7 @@ on the ``C`` and ``R`` flags, as is noted below.
 The validation process checks that all of the following conditions are true:
 
 - The time derived from the expiration tick is less than the current time.
-- The consistency of the flags: if `S` is set, `C` must be set as well, but
-  not R.
+- The consistency of the flags: if `S` is set, `C` must be set as well.
 - HFCount is at least 2, :math:`\text{HFCount} \geq 2`.
 - The `CurrHF` is not beyond bounds.
   I.e. :math:`\text{CurrHF} \lt \text{HFCount}`
