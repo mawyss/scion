@@ -132,13 +132,24 @@ taken to fulfill them:
      reservation. This is the ``Segment (S)`` flag. It forces the ``C`` to
      be also set (only control traffic is allowed on segment reservations).
    - A COLIBRI packet can reverse its path, via the ``Reverse (R)`` flag.
-     This flag forces the ``C`` flag to be set (only control traffic is
-     allowed to travel on the reverse path).
      Via this flag, we can always send the responses to the requests that
      the COLIBRI services receive. The responses always travel in the
      reverse direction, and must always stop at each COLIBRI service
      on the path.
-     The bandwidth is also guaranteed when ``R=1``.
+     For control plane traffic, the bandwidth is also guaranteed when
+     ``R=1``. Data plane traffic going in the reverse direction will
+     be treated as best-effort traffic.
+
+.. Note::
+
+   As also data plane traffic can traverse a COLIBRI path in the
+   reverse direction, this allows the destination host to directly
+   send back an answer without having to fetch a new path to the
+   source. It furthermore enables border routers to reply with SCMP
+   messages in case of a forwarding failure.
+   *This decision to allow reverse data plane traffic is tentative:
+   we need to check whether it is actually the best solution to allow
+   for those use cases.*
 
 #. The cryptographic tag enabling packet validation for an AS relies only on a
    private key derived from secret AS values (e.g., the master key), and fields
@@ -270,17 +281,23 @@ SL, DL
 ST, DT
     Source and Destination host addresses types.
 
-We then introduce a high-precision time stamp of each packet, *TS*.
+We then introduce a high-precision time stamp of each packet, *PacketTimestamp*.
 This time stamp is further defined in the SCION header document
 (the value of HVF changes with each E2E COLIBRI packet, even when
 :math:`\sigma_B` does not).
 The (HVF) is computed as follows:
 
 .. math::
-    \text{HVF}_B &= \text{MAC}_{\sigma_B}(\text{TS}, \text{packet_length}) \\
+    \text{HVF}_B &= \text{MAC}_{\sigma_B}(\text{PacketTimestamp},
+    \text{Original Payload Length}) \\
 
 Note that the key used to compute the HVF is :math:`\sigma_B`, the static
 MAC computed by *B*, which is only known to *B* and *A*.
+The *Original Payload Length* is the same as the PayloadLen from the
+SCION common header in case of ``R=0``. For ``R=1`` it does not contain
+the packet length of the (response) packet, but still the packet length
+of the original packet (which went in the forward direction). This
+allows to verify the HVF also for backwards COLIBRI data plane traffic.
 
 The MAC values when ``C=1`` are communicated in the successful response
 of a segment or E2E reservation setup or renewal,

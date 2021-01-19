@@ -848,7 +848,7 @@ The only info field has the following format::
      0                   1                   2                   3
      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |C R S r r r r r r r r r r r r r|     CurrHF    |    HFCount    |
+    |C R S r r r r r r r r r|  Ver  |     CurrHF    |    HFCount    |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                                                               |
     |                     Reservation ID Suffix                     |
@@ -856,7 +856,7 @@ The only info field has the following format::
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                        Expiration Tick                        |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |      BWCls    |      RLC      |  Ver  |r r r r r r r r r r r r|
+    |      BWCls    |      RLC      |    Original Payload Length    |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 r
@@ -867,12 +867,14 @@ r
     forwarded to the COLIBRI anycast address.
 (R)everse
     This packet travels in the reverse direction of the reservation.
-    If `R` is set, `C` must be set as well. Otherwise the packet is invalid.
+    If `R` is set, `S` must not be set. Otherwise the packet is invalid.
     This flag is set every time the COLIBRI service sends back a response.
 (S)egment Reservation
     This is a Segment Reservation Packet.
     If `S` is set, `C` must be set as well. Otherwise the packet is invalid.
     This flag is set every time the Reservation ID is of type Segment ID.
+Ver
+    The version of this reservation.
 CurrHF
     The index of the current HopField.
 HFCount
@@ -891,8 +893,12 @@ BWCls
     The bandwidth class this reservation has.
 RLC
     The Request Latency Class this reservation has.
-Ver
-    The version of this reservation.
+Original Payload Length
+    The field only has a meaning if S = 0.
+    If R = 0, then this field is the same as the PayloadLen field in
+    the SCION common header. If R = 1 (the packet is a response),
+    then the field contains the original payload length, i.e., the
+    payload lenght of the preceding COLIBRI packet with R = 0.
 
 Reservation ID Reconstruction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1006,17 +1012,17 @@ to compute the *per-packet MAC*,
 also known as HopField Validation Field (*HVF*):
 
 .. math::
-    \text{HVF}_i = \text{MAC}_{\sigma_i}(\text{TS}, \text{packet_length})
+    \text{HVF}_i = \text{MAC}_{\sigma_i}(\text{PacketTimestamp}, \text{Original Payload Length})
 
 With:
 
-TS
+PacketTimestamp
     The Timestamp described on `packet timestamp`_.
-packet_length
-    The length of the packet.
+Original Payload Length
+    It is taken from the COLIBRI Info Field.
 
 The per packet MACs (or *HVFs*) are used only when ``C=0``, which implies
-that the other two flags are also not set (``R=0, S=0``). The computation of
+that the S flag is also not set (``S=0``). The computation of
 the HVFs for all HopFields happens at the *stamping* service in the source AS,
 and they are verified at each transit AS, one HVF per transit AS.
 
@@ -1035,7 +1041,8 @@ on the ``C`` and ``R`` flags, as is noted below.
 The validation process checks that all of the following conditions are true:
 
 - The time derived from the expiration tick is less than the current time.
-- The consistency of the flags: if `R` or `S` are set, `C` must be set.
+- The consistency of the flags: if `S` is set, `C` must be set as well, but
+  not R.
 - HFCount is at least 2, :math:`\text{HFCount} \geq 2`.
 - The `CurrHF` is not beyond bounds.
   I.e. :math:`\text{CurrHF} \lt \text{HFCount}`
