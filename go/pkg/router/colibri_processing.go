@@ -80,19 +80,20 @@ func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
 	S := c.colibriPathMinimal.InfoField.S
 	C := c.colibriPathMinimal.InfoField.C
 
-	// Consistency of R, S, and C flags: (S or R) implies C
-	if (S || R) && !C {
+	// Consistency of flags: S implies C
+	if S && !C {
 		return processResult{}, serrors.New("invalid flags", "S", S, "R", R, "C", C)
 	}
 	// Correct ingress interface
-	if R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId {
-		return processResult{}, serrors.New("invalid ingress identifier")
-	}
-	if !R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId {
+	if (R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId) ||
+		(!R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId) {
+
 		return processResult{}, serrors.New("invalid ingress identifier")
 	}
 	// Valid packet length
-	if int(c.scionLayer.PayloadLen) != len(c.scionLayer.Payload) {
+	if (!R && c.scionLayer.PayloadLen != c.colibriPathMinimal.InfoField.OrigPayLen) ||
+		(int(c.scionLayer.PayloadLen) != len(c.scionLayer.Payload)) {
+
 		return processResult{}, serrors.New("packet length validation failed")
 	}
 	// Colibri path has at least two hop fields
