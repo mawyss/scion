@@ -31,7 +31,7 @@ func PrepareMacInputSigma(s *slayers.SCION, inf *colibri.InfoField,
 	return prepareMacInputSigma(s, inf, hop)
 }
 
-func PrepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64) ([]byte, error) {
+func PrepareMacInputPacket(packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
 
-	return prepareMacInputPacket(s, packetTimestamp)
+	return prepareMacInputPacket(packetTimestamp, inf)
 }

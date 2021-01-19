@@ -70,11 +70,12 @@ func TestPacketMacInputGeneration(t *testing.T) {
 	want := []byte{0x12, 0x34, 0x56, 0x78, 0x7, 0x0, 0x4, 0x1, 0x0,
 		0x78, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}
 
-	s := createScionCmnAddrHdr()
+	c := createColibriPath()
+	c.InfoField.OrigPayLen = 120
 	var tsRel uint32 = 0x12345678
 	packetTimestamp := libcolibri.CreateColibriTimestamp(tsRel, 7, 1025)
 
-	got, err := libcolibri.PrepareMacInputPacket(s, packetTimestamp)
+	got, err := libcolibri.PrepareMacInputPacket(packetTimestamp, c.InfoField)
 	assert.NoError(t, err)
 	assert.Equal(t, want, got)
 }
@@ -176,7 +177,7 @@ func TestPacketHVFVerification(t *testing.T) {
 		auth, err := libcolibri.CalculateColibriMacSigma(privateKey, c.InfoField,
 			c.HopFields[c.InfoField.CurrHF], s)
 		assert.NoError(t, err)
-		mac, err := libcolibri.CalculateColibriMacPacket(auth, s, c.PacketTimestamp, c.InfoField)
+		mac, err := libcolibri.CalculateColibriMacPacket(auth, c.PacketTimestamp, c.InfoField)
 		assert.NoError(t, err)
 		c.HopFields[c.InfoField.CurrHF].Mac = mac
 

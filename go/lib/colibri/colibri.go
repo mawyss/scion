@@ -165,7 +165,7 @@ func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField
 		if err != nil {
 			return err
 		}
-		mac, err = CalculateColibriMacPacket(auth, s, packetTimestamp, inf)
+		mac, err = CalculateColibriMacPacket(auth, packetTimestamp, inf)
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func CalculateColibriMacSigma(privateKey []byte, inf *colibri.InfoField,
 }
 
 // CalculateColibriMacPacket calculates the per-packet colibri MAC.
-func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp uint64,
+func CalculateColibriMacPacket(auth []byte, packetTimestamp uint64,
 	inf *colibri.InfoField) ([]byte, error) {
 
 	// Initialize cryptographic MAC function
@@ -233,14 +233,11 @@ func CalculateColibriMacPacket(auth []byte, s *slayers.SCION, packetTimestamp ui
 		return nil, err
 	}
 	// Prepare the input for the MAC function
-	input, err := prepareMacInputPacket(s, packetTimestamp)
+	input, err := prepareMacInputPacket(packetTimestamp, inf)
 	if err != nil {
 		return nil, err
 	}
-	if len(input) < 16 || len(input)%16 != 0 {
-		return nil, serrors.New("colibri per-packet mac input has invalid length", "expected", 16,
-			"is", len(input))
-	}
+
 	// Calculate CBC-MAC = first 4 bytes of the last CBC block
 	mac := make([]byte, len(input))
 	f.CryptBlocks(mac, input)
@@ -298,14 +295,14 @@ func prepareMacInputSigma(s *slayers.SCION, inf *colibri.InfoField,
 	return buffer, nil
 }
 
-func prepareMacInputPacket(s *slayers.SCION, packetTimestamp uint64) ([]byte, error) {
-	if s == nil {
+func prepareMacInputPacket(packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
+	if inf == nil {
 		return nil, serrors.New("invalid input")
 	}
 
 	input := make([]byte, 16)
 	binary.BigEndian.PutUint64(input[0:8], packetTimestamp)
-	binary.BigEndian.PutUint16(input[8:10], s.PayloadLen)
+	binary.BigEndian.PutUint16(input[8:10], inf.OrigPayLen)
 
 	return input, nil
 }
