@@ -129,6 +129,7 @@ func (c *ColibriPathMinimal) SerializeTo(b []byte) error {
 }
 
 // Reverse reverses the path: the R-flag is toggled and the order of the Hop Fields is inverted.
+// The currHF field is updated to still point to the current hop field.
 // This is reflected in the underlying Raw buffer, as well as the updated Info and Hop Field.
 func (c *ColibriPathMinimal) Reverse() (path.Path, error) {
 	// XXX(mawyss): The current implementation is not the most performant, as it parses the entire

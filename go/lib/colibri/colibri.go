@@ -202,7 +202,7 @@ func CalculateColibriMacStatic(privateKey []byte, inf *colibri.InfoField,
 	return mac[len(mac)-16 : len(mac)-12], nil
 }
 
-// CalculateColibriMacSigma calculates "sigma" authenticator.
+// CalculateColibriMacSigma calculates the "sigma" authenticator.
 func CalculateColibriMacSigma(privateKey []byte, inf *colibri.InfoField,
 	currHop *colibri.HopField, s *slayers.SCION) ([]byte, error) {
 
