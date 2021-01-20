@@ -100,9 +100,13 @@ func (c *ColibriPath) Reverse() (path.Path, error) {
 	if c.InfoField == nil {
 		return nil, serrors.New("the info field must not be nil")
 	}
+	if c.InfoField.CurrHF >= c.InfoField.HFCount {
+		return nil, serrors.New("CurrHF >= HFCount", "CurrHF", c.InfoField.CurrHF,
+			"HFCount", c.InfoField.HFCount)
+	}
 
 	c.InfoField.R = !c.InfoField.R
-	c.InfoField.CurrHF = c.InfoField.HFCount - c.InfoField.CurrHF
+	c.InfoField.CurrHF = c.InfoField.HFCount - c.InfoField.CurrHF - 1
 
 	hf := len(c.HopFields)
 	for i, j := 0, hf-1; i < j; i, j = i+1, j-1 {

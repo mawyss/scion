@@ -122,7 +122,7 @@ func CreateTsRel(expirationTick uint32) (uint32, error) {
 func VerifyExpirationTick(expirationTick uint32) bool {
 	expTime := 4 * int64(expirationTick)
 	now := time.Now().Unix()
-	return now >= expTime
+	return now <= expTime
 }
 
 // VerifyTimestamp checks whether a COLIBRI packet is fresh. This means that the time the packet
@@ -172,7 +172,8 @@ func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField
 	}
 
 	if !bytes.Equal(mac[:4], currHop.Mac[:4]) {
-		return serrors.New("colibri mac verification failed")
+		return serrors.New("colibri mac verification failed", "calculated", mac[:4],
+			"packet", currHop.Mac[:4])
 	}
 
 	return nil
@@ -272,14 +273,22 @@ func prepareMacInputStatic(s *slayers.SCION, inf *colibri.InfoField,
 func prepareMacInputSigma(s *slayers.SCION, inf *colibri.InfoField,
 	hop *colibri.HopField) ([]byte, error) {
 
+	// Check consistency of SL and DL with the actual address lengths
+	srcLen := len(s.RawSrcAddr)
+	dstLen := len(s.RawDstAddr)
+	consistent := (4*(int(s.DstAddrLen)+1) == dstLen) &&
+		(4*(int(s.SrcAddrLen)+1) == srcLen)
+	if !consistent {
+		return nil, serrors.New("SL/DL not consistent with actual address lengths",
+			"DL", s.DstAddrLen, "SL", s.SrcAddrLen)
+	}
+
 	// Write SL/ST/DL/DT into one single byte
 	flags := uint8(s.DstAddrType&0x3)<<6 | uint8(s.DstAddrLen&0x3)<<4 |
 		uint8(s.SrcAddrType&0x3)<<2 | uint8(s.SrcAddrLen&0x3)
 
 	// The MAC input consists of the InputData plus the host addresses and the flags, rounded
 	// up to the next multiple of 16 bytes
-	srcLen := len(s.RawSrcAddr)
-	dstLen := len(s.RawDstAddr)
 	bufLen := lengthInputData + 1 + srcLen + dstLen
 	nrBlocks := uint8(math.Ceil(float64(bufLen) / 16))
 	buffer := make([]byte, 16*nrBlocks)

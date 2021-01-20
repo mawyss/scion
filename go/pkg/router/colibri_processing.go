@@ -84,17 +84,24 @@ func (c *colibriPacketProcessor) basicValidation() (processResult, error) {
 	if S && !C {
 		return processResult{}, serrors.New("invalid flags", "S", S, "R", R, "C", C)
 	}
-	// Correct ingress interface
-	if (R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId) ||
-		(!R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId) {
+	// Correct ingress interface (if we received the packet on the local interface, we do not
+	// need to check the interface in the hop field)
+	if c.ingressID != 0 &&
+		((R && c.ingressID != c.colibriPathMinimal.CurrHopField.EgressId) ||
+			(!R && c.ingressID != c.colibriPathMinimal.CurrHopField.IngressId)) {
 
-		return processResult{}, serrors.New("invalid ingress identifier")
+		return processResult{}, serrors.New("invalid ingress identifier",
+			"R", R, "receivedOn", c.ingressID,
+			"HopFieldIngressId", c.colibriPathMinimal.CurrHopField.IngressId,
+			"HopFieldEgressId", c.colibriPathMinimal.CurrHopField.EgressId)
 	}
 	// Valid packet length
 	if (!R && c.scionLayer.PayloadLen != c.colibriPathMinimal.InfoField.OrigPayLen) ||
 		(int(c.scionLayer.PayloadLen) != len(c.scionLayer.Payload)) {
 
-		return processResult{}, serrors.New("packet length validation failed")
+		return processResult{}, serrors.New("packet length validation failed",
+			"scion", c.scionLayer.PayloadLen, "colibri", c.colibriPathMinimal.InfoField.OrigPayLen,
+			"actual", len(c.scionLayer.Payload))
 	}
 	// Colibri path has at least two hop fields
 	hfCount := c.colibriPathMinimal.InfoField.HFCount
