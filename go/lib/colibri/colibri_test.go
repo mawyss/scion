@@ -16,7 +16,6 @@ package colibri_test
 
 import (
 	"math"
-	"math/rand"
 	"net"
 	"testing"
 	"time"
@@ -81,10 +80,9 @@ func TestPacketMacInputGeneration(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
-	testCases := []uint64{0, 1, math.MaxInt32}
-	for i := 1; i <= 10; i++ {
-		testCases = append(testCases, randUint64())
-	}
+	testCases := []uint64{0, 1, uint64(4041796896134235295), uint64(12590502804441994123),
+		uint64(2265056923175922768), uint64(9648491470230957773), math.MaxInt32}
+
 	for _, want := range testCases {
 		tsRel, coreID, coreCounter := libcolibri.ParseColibriTimestamp(want)
 		got := libcolibri.CreateColibriTimestamp(tsRel, coreID, coreCounter)
@@ -145,25 +143,23 @@ func TestStaticHVFVerification(t *testing.T) {
 	c := createColibriPath()
 
 	c.InfoField.C = true
-	for i := 1; i <= 10; i++ {
-		// Generate MAC
-		privateKey := randBytes(16)
-		mac, err := libcolibri.CalculateColibriMacStatic(privateKey, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.NoError(t, err)
-		c.HopFields[c.InfoField.CurrHF].Mac = mac
+	// Generate MAC
+	privateKey := []byte("a_random_key_123")
+	mac, err := libcolibri.CalculateColibriMacStatic(privateKey, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.NoError(t, err)
+	c.HopFields[c.InfoField.CurrHF].Mac = mac
 
-		// Verify MAC correctly
-		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.NoError(t, err)
+	// Verify MAC correctly
+	err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.NoError(t, err)
 
-		// Verify MAC with wrong key
-		privateKey = randBytes(16)
-		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.Error(t, err)
-	}
+	// Verify MAC with wrong key
+	privateKey = []byte("a_random_key_456")
+	err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.Error(t, err)
 }
 
 func TestPacketHVFVerification(t *testing.T) {
@@ -171,27 +167,26 @@ func TestPacketHVFVerification(t *testing.T) {
 	c := createColibriPath()
 
 	c.InfoField.C = false
-	for i := 1; i <= 10; i++ {
-		// Generate MAC
-		privateKey := randBytes(16)
-		auth, err := libcolibri.CalculateColibriMacSigma(privateKey, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.NoError(t, err)
-		mac, err := libcolibri.CalculateColibriMacPacket(auth, c.PacketTimestamp, c.InfoField)
-		assert.NoError(t, err)
-		c.HopFields[c.InfoField.CurrHF].Mac = mac
+	// Generate MAC
+	privateKey := []byte("a_random_key_123")
+	auth, err := libcolibri.CalculateColibriMacSigma(privateKey, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.NoError(t, err)
+	mac, err := libcolibri.CalculateColibriMacPacket(auth, c.PacketTimestamp, c.InfoField)
+	assert.NoError(t, err)
+	c.HopFields[c.InfoField.CurrHF].Mac = mac
 
-		// Verify MAC correctly
-		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.NoError(t, err)
+	// Verify MAC correctly
+	err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.NoError(t, err)
 
-		// Verify MAC with wrong key
-		privateKey = randBytes(16)
-		err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
-			c.HopFields[c.InfoField.CurrHF], s)
-		assert.Error(t, err)
-	}
+	// Verify MAC with wrong key
+	privateKey = []byte("a_random_key_456")
+	err = libcolibri.VerifyMAC(privateKey, c.PacketTimestamp, c.InfoField,
+		c.HopFields[c.InfoField.CurrHF], s)
+	assert.Error(t, err)
+
 }
 
 func createScionCmnAddrHdr() *slayers.SCION {
@@ -218,11 +213,11 @@ func createColibriPath() *colibri.ColibriPath {
 		InfoField: &colibri.InfoField{
 			CurrHF:      0,
 			HFCount:     10,
-			ResIdSuffix: randBytes(12),
+			ResIdSuffix: []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
 			ExpTick:     uint32(time.Now().Unix() / 4),
-			BwCls:       randBytes(1)[0],
-			Rlc:         randBytes(1)[0],
-			Ver:         randBytes(1)[0],
+			BwCls:       1,
+			Rlc:         2,
+			Ver:         3,
 		},
 	}
 	hopfields := make([]*colibri.HopField, 10)
@@ -236,14 +231,4 @@ func createColibriPath() *colibri.ColibriPath {
 	}
 	colibripath.HopFields = hopfields
 	return colibripath
-}
-
-func randUint64() uint64 {
-	return uint64(rand.Uint32())<<32 + uint64(rand.Uint32())
-}
-
-func randBytes(l uint16) []byte {
-	r := make([]byte, l)
-	rand.Read(r)
-	return r
 }

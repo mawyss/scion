@@ -22,10 +22,15 @@ import (
 	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
 )
 
+var randSlice = []byte("fe31a2e94699ede20df7edaefd8042d866bf3a4c1a7f2be603973ff077c3a6366c7933" +
+	"170974efeeec1dc88ba2bf6f88f86dd34b158cd8c176b4b1cd965ee1e093336a667952eb38efa8ff1618e9f80" +
+	"9499a578e26f23b68cfbb56a5a7cdd7b2c0f974e43c14fbc22ef2f4ea25e2224649304a961d3e2867c3cb8bf9" +
+	"2ba7bd0f")
+
 func TestColibriSerializeDecode(t *testing.T) {
 	for i := 2; i < 11; i++ {
 		bufferLength := 8 + colibri.LenInfoField + i*colibri.LenHopField
-		buffer := randBytes(uint16(bufferLength))
+		buffer := randSlice[:bufferLength]
 		// Remove the "reserved" flags from the info field
 		buffer[8] = buffer[8] & uint8(0xE0)
 		buffer[9] = 0
@@ -57,7 +62,7 @@ func TestColibriSerializeDecode(t *testing.T) {
 func TestColibriReverse(t *testing.T) {
 	for i := 2; i < 11; i++ {
 		bufferLength := 8 + colibri.LenInfoField + i*colibri.LenHopField
-		buffer := randBytes(uint16(bufferLength))
+		buffer := randSlice[:bufferLength]
 		// Set correct number of hop fields
 		buffer[10] = uint8(i - 1)
 		buffer[11] = uint8(i)

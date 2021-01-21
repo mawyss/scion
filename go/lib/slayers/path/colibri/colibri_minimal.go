@@ -37,6 +37,8 @@ func RegisterPath() {
 	})
 }
 
+// ColibriPathMinimal denotes a COLIBRI path representation optimized for the border router. Only
+// the current hop field is parsed, the border router does not need the other ones.
 type ColibriPathMinimal struct {
 	// PacketTimestamp denotes the high-precision timestamp.
 	PacketTimestamp uint64
@@ -173,8 +175,8 @@ func (c *ColibriPathMinimal) Type() path.Type {
 	return PathType
 }
 
-// UpdateCurrHF increases/decreases the CurrHF index depending on the R flag.
-// The CurrHopField pointer is not updated and will still point to the old hop field.
+// UpdateCurrHF increases the CurrHF index.
+// The CurrHopField reference is not updated and will still point to the old hop field.
 func (c *ColibriPathMinimal) UpdateCurrHF() error {
 	if c == nil {
 		return serrors.New("colibri path must not be nil")

@@ -15,7 +15,6 @@
 package colibri_test
 
 import (
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,44 +24,13 @@ import (
 
 func TestColibriHopfieldSerializeDecode(t *testing.T) {
 	buffer := make([]byte, colibri.LenHopField)
-	for i := 1; i < 10; i++ {
-		hf := &colibri.HopField{
-			IngressId: randUint16(),
-			EgressId:  randUint16(),
-			Mac:       randBytes(4),
-		}
-		assert.NoError(t, hf.SerializeTo(buffer))
-		hf2 := &colibri.HopField{}
-		assert.NoError(t, hf2.DecodeFromBytes(buffer))
-		assert.Equal(t, hf, hf2)
+	hf := &colibri.HopField{
+		IngressId: 35,
+		EgressId:  24,
+		Mac:       []byte{0xf2, 0x83, 0x54, 0xaa},
 	}
-}
-
-func randUint64() uint64 {
-	return rand.Uint64()
-}
-
-func randUint32() uint32 {
-	return rand.Uint32()
-}
-
-func randUint16() uint16 {
-	return uint16(randUint32())
-}
-
-func randUint8() uint8 {
-	return uint8(randUint32())
-}
-
-func randBool() bool {
-	if randUint16()%2 == 1 {
-		return true
-	}
-	return false
-}
-
-func randBytes(l uint16) []byte {
-	r := make([]byte, l)
-	rand.Read(r)
-	return r
+	assert.NoError(t, hf.SerializeTo(buffer))
+	hf2 := &colibri.HopField{}
+	assert.NoError(t, hf2.DecodeFromBytes(buffer))
+	assert.Equal(t, hf, hf2)
 }

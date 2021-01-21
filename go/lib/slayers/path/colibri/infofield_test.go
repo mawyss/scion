@@ -23,17 +23,15 @@ import (
 )
 
 func TestColibriInfofieldSerializeDecode(t *testing.T) {
-	for i := 1; i < 10; i++ {
-		buffer := randBytes(uint16(colibri.LenInfoField))
-		// Remove the "reserved" flags
-		buffer[0] = buffer[0] & uint8(0xE0)
-		buffer[1] = buffer[1] & uint8(0x0F)
+	buffer := []byte("073f5f1c20df5381f2e896d0")
+	// Remove the "reserved" flags
+	buffer[0] = buffer[0] & uint8(0xE0)
+	buffer[1] = buffer[1] & uint8(0x0F)
 
-		inf := &colibri.InfoField{}
-		assert.NoError(t, inf.DecodeFromBytes(buffer))
+	inf := &colibri.InfoField{}
+	assert.NoError(t, inf.DecodeFromBytes(buffer))
 
-		buffer2 := make([]byte, colibri.LenInfoField)
-		assert.NoError(t, inf.SerializeTo(buffer2))
-		assert.Equal(t, buffer, buffer2)
-	}
+	buffer2 := make([]byte, colibri.LenInfoField)
+	assert.NoError(t, inf.SerializeTo(buffer2))
+	assert.Equal(t, buffer, buffer2)
 }
