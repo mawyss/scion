@@ -151,21 +151,26 @@ func (c *colibriPacketProcessor) forward() (processResult, error) {
 
 	if c.ingressID == 0 {
 		// Received packet from within AS
-		return c.forwardToLocalEgress(egressId)
+		if conn, ok := c.canForwardLocally(egressId); ok {
+			return c.forwardToLocalEgress(egressId, conn)
+		}
+		return processResult{}, serrors.New("received packet from local AS but the packet should" +
+			"go to different border router")
 	}
 
 	// Received packet from outside of the AS
 	if c.colibriPathMinimal.InfoField.C {
 		// Control plane forwarding
-		// Assumption: in case there are multiple COLIBRI services, they are always synchronized
+		// Assumption: in case there are multiple COLIBRI services, they are always synchronized,
+		// so we can forward the packet to an arbitrary COLIBRI service.
 		return c.forwardToColibriSvc()
 	} else {
 		// Data plane forwarding
 		if c.destinedToLocalHost(egressId) {
 			return c.forwardToLocalHost()
 		} else {
-			if r, err := c.forwardToLocalEgress(egressId); err == nil {
-				return r, err
+			if conn, ok := c.canForwardLocally(egressId); ok {
+				return c.forwardToLocalEgress(egressId, conn)
 			}
 			return c.forwardToRemoteEgress(egressId)
 		}
@@ -208,23 +213,25 @@ func (c *colibriPacketProcessor) ingressInterface() (uint16, error) {
 	}
 }
 
-func (c *colibriPacketProcessor) forwardToLocalEgress(egressId uint16) (processResult, error) {
+func (c *colibriPacketProcessor) canForwardLocally(egressId uint16) (BatchConn, bool) {
+	conn, ok := c.d.external[egressId]
+	return conn, ok
+}
+
+func (c *colibriPacketProcessor) forwardToLocalEgress(egressId uint16,
+	conn BatchConn) (processResult, error) {
 	// BR transit: the packet will leave the AS through the same border router, but through a
 	// different interface.
-	if conn, ok := c.d.external[egressId]; ok {
-		// Increase/decrease (depending on "R" flag) the hop field index.
-		if err := c.colibriPathMinimal.UpdateCurrHF(); err != nil {
-			return processResult{}, err
-		}
-		// Serialize updated hop field index into rawPkt.
-		if err := c.colibriPathMinimal.SerializeToInternal(); err != nil {
-			return processResult{}, err
-		}
-		return processResult{EgressID: egressId, OutConn: conn, OutPkt: c.rawPkt}, nil
-	} else {
-		return processResult{}, serrors.New("no external interface with this id",
-			"egressId", egressId)
+
+	// Increase the hop field index.
+	if err := c.colibriPathMinimal.UpdateCurrHF(); err != nil {
+		return processResult{}, err
 	}
+	// Serialize updated hop field index into rawPkt.
+	if err := c.colibriPathMinimal.SerializeToInternal(); err != nil {
+		return processResult{}, err
+	}
+	return processResult{EgressID: egressId, OutConn: conn, OutPkt: c.rawPkt}, nil
 }
 
 func (c *colibriPacketProcessor) forwardToRemoteEgress(egressId uint16) (processResult, error) {
