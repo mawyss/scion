@@ -31,10 +31,12 @@ import (
 	"golang.org/x/net/ipv4"
 
 	"github.com/scionproto/scion/go/lib/addr"
+	libcolibri "github.com/scionproto/scion/go/lib/colibri"
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/scrypto"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
+	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
 	"github.com/scionproto/scion/go/lib/slayers/path/onehop"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
@@ -1086,6 +1088,563 @@ func TestProcessPkt(t *testing.T) {
 	}
 }
 
+func TestProcessColibriPkt(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	key := []byte("testkey_colibri_")
+
+	testCases := map[string]struct {
+		mockMsg      func(bool, uint32, uint32) *ipv4.Message
+		prepareDP    func(*gomock.Controller) *router.DataPlane
+		srcInterface uint16
+		assertFunc   assert.ErrorAssertionFunc
+	}{
+		"dataplane_first_AS_outbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 0, 5, expTick, tsRel)
+				cpath.HopFields[0].Mac = computeColibriMac(t, false, key, cpath, spkt, 0,
+					cpath.PacketTimestamp)
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"dataplane_onpath_AS_forward_to_local_egress": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(2): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Parent,
+						2: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, false, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"dataplane_onpath_AS_forward_to_remote_egress": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil,
+					map[uint16]topology.LinkType{
+						1: topology.Core,
+						2: topology.Core,
+					},
+					mock_router.NewMockBatchConn(ctrl),
+					map[uint16]net.Addr{
+						uint16(2): &net.IPAddr{IP: net.ParseIP("10.0.200.200").To4()},
+					}, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, false, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+
+				ret := toMsg(t, spkt, cpath)
+				if afterProcessing {
+					ret.Addr = &net.IPAddr{IP: net.ParseIP("10.0.200.200").To4()}
+					ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				}
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"dataplane_last_AS_inbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 4, 5, expTick, tsRel)
+				dst := &net.IPAddr{IP: net.ParseIP("10.0.0.3").To4()}
+				spkt.SetDstAddr(dst)
+				spkt.DstIA = xtest.MustParseIA("1-ff00:0:110")
+
+				cpath.HopFields[4].Mac = computeColibriMac(t, false, key, cpath, spkt, 4,
+					cpath.PacketTimestamp)
+
+				ret := toMsg(t, spkt, cpath)
+				if afterProcessing {
+					ret.Addr = &net.UDPAddr{IP: dst.IP, Port: topology.EndhostPort}
+					ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				}
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_dataplane_last_AS_outbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 4, 5, expTick, tsRel)
+				cpath.HopFields[4].Mac = computeColibriMac(t, false, key, cpath, spkt, 4,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_dataplane_onpath_AS_forward_to_local_egress": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Parent,
+						2: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, false, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 2,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_dataplane_onpath_AS_forward_to_remote_egress": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil,
+					map[uint16]topology.LinkType{
+						1: topology.Core,
+						2: topology.Core,
+					},
+					mock_router.NewMockBatchConn(ctrl),
+					map[uint16]net.Addr{
+						uint16(1): &net.IPAddr{IP: net.ParseIP("10.0.200.200").To4()},
+					}, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, false, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				ret := toMsg(t, spkt, cpath)
+				if afterProcessing {
+					ret.Addr = &net.IPAddr{IP: net.ParseIP("10.0.200.200").To4()}
+					ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				}
+				return ret
+			},
+			srcInterface: 2,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_dataplane_first_AS_inbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(false, false, false, 0, 5, expTick, tsRel)
+				dst := &net.IPAddr{IP: net.ParseIP("10.0.0.3").To4()}
+				spkt.SetDstAddr(dst)
+				spkt.DstIA = xtest.MustParseIA("1-ff00:0:110")
+				cpath.HopFields[0].Mac = computeColibriMac(t, false, key, cpath, spkt, 0,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				ret := toMsg(t, spkt, cpath)
+				if afterProcessing {
+					ret.Addr = &net.UDPAddr{IP: dst.IP, Port: topology.EndhostPort}
+					ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				}
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"controlplane_first_AS_outbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 0, 5, expTick, tsRel)
+				cpath.HopFields[0].Mac = computeColibriMac(t, true, key, cpath, spkt, 0,
+					cpath.PacketTimestamp)
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"controlplane_onpath_AS_inbound_to_colibri_service": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					map[addr.HostSVC][]*net.UDPAddr{
+						addr.SvcCOL: {
+							&net.UDPAddr{
+								IP:   net.ParseIP("10.0.200.200").To4(),
+								Port: topology.EndhostPort,
+							},
+						},
+					},
+					xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, true, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+
+				ret := toMsg(t, spkt, cpath)
+				if !afterProcessing {
+					return ret
+				}
+
+				ret.Addr = &net.UDPAddr{IP: net.ParseIP("10.0.200.200").To4(),
+					Port: topology.EndhostPort}
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"controlplane_onpath_AS_inbound_to_colibri_service_NOSERVICE": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					map[addr.HostSVC][]*net.UDPAddr{},
+					xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, true, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+
+				ret := toMsg(t, spkt, cpath)
+				if !afterProcessing {
+					return ret
+				}
+
+				ret.Addr = &net.UDPAddr{IP: net.ParseIP("10.0.200.200").To4(),
+					Port: topology.EndhostPort}
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.Error,
+		},
+		"controlplane_onpath_AS_outbound_from_colibri_service": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(2): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						2: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, true, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"controlplane_last_AS_inbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					map[addr.HostSVC][]*net.UDPAddr{
+						addr.SvcCOL: {
+							&net.UDPAddr{
+								IP:   net.ParseIP("10.0.200.200").To4(),
+								Port: topology.EndhostPort,
+							},
+						},
+					},
+					xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 4, 5, expTick, tsRel)
+				cpath.HopFields[4].Mac = computeColibriMac(t, true, key, cpath, spkt, 4,
+					cpath.PacketTimestamp)
+
+				ret := toMsg(t, spkt, cpath)
+				if !afterProcessing {
+					return ret
+				}
+
+				ret.Addr = &net.UDPAddr{IP: net.ParseIP("10.0.200.200").To4(),
+					Port: topology.EndhostPort}
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_controlplane_last_AS_outbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 4, 5, expTick, tsRel)
+				cpath.HopFields[4].Mac = computeColibriMac(t, true, key, cpath, spkt, 4,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_controlplane_onpath_AS_inbound_to_colibri_service": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					map[addr.HostSVC][]*net.UDPAddr{
+						addr.SvcCOL: {
+							&net.UDPAddr{
+								IP:   net.ParseIP("10.0.200.200").To4(),
+								Port: topology.EndhostPort,
+							},
+						},
+					},
+					xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, true, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				ret := toMsg(t, spkt, cpath)
+				if !afterProcessing {
+					return ret
+				}
+
+				ret.Addr = &net.UDPAddr{IP: net.ParseIP("10.0.200.200").To4(),
+					Port: topology.EndhostPort}
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 2,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_controlplane_onpath_AS_outbound_from_colibri_service": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(
+					map[uint16]router.BatchConn{
+						uint16(1): mock_router.NewMockBatchConn(ctrl),
+					},
+					map[uint16]topology.LinkType{
+						1: topology.Child,
+					},
+					nil, nil, nil, xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 2, 5, expTick, tsRel)
+				cpath.HopFields[2].Mac = computeColibriMac(t, true, key, cpath, spkt, 2,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				if !afterProcessing {
+					return toMsg(t, spkt, cpath)
+				}
+
+				cpath.InfoField.CurrHF = cpath.InfoField.CurrHF + 1
+				ret := toMsg(t, spkt, cpath)
+				ret.Addr = nil
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 0,
+			assertFunc:   assert.NoError,
+		},
+		"reversed_controlplane_first_AS_inbound": {
+			prepareDP: func(ctrl *gomock.Controller) *router.DataPlane {
+				return router.NewDP(nil, nil, mock_router.NewMockBatchConn(ctrl), nil,
+					map[addr.HostSVC][]*net.UDPAddr{
+						addr.SvcCOL: {
+							&net.UDPAddr{
+								IP:   net.ParseIP("10.0.200.200").To4(),
+								Port: topology.EndhostPort,
+							},
+						},
+					},
+					xtest.MustParseIA("1-ff00:0:110"), key)
+			},
+			mockMsg: func(afterProcessing bool, expTick, tsRel uint32) *ipv4.Message {
+				spkt, cpath := prepColibriBaseMsg(true, false, false, 0, 5, expTick, tsRel)
+				cpath.HopFields[0].Mac = computeColibriMac(t, true, key, cpath, spkt, 0,
+					cpath.PacketTimestamp)
+				cpath.Reverse()
+
+				ret := toMsg(t, spkt, cpath)
+				if !afterProcessing {
+					return ret
+				}
+
+				ret.Addr = &net.UDPAddr{IP: net.ParseIP("10.0.200.200").To4(),
+					Port: topology.EndhostPort}
+				ret.Flags, ret.NN, ret.N, ret.OOB = 0, 0, 0, nil
+				return ret
+			},
+			srcInterface: 1,
+			assertFunc:   assert.NoError,
+		},
+	}
+
+	for name, tc := range testCases {
+		name, tc := name, tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dp := tc.prepareDP(ctrl)
+
+			expTick := uint32(time.Now().Unix()/4) + 3
+			tsRel, err := libcolibri.CreateTsRel(expTick)
+			assert.NoError(t, err)
+			input, want := tc.mockMsg(false, expTick, tsRel), tc.mockMsg(true, expTick, tsRel)
+
+			buffer := gopacket.NewSerializeBuffer()
+			origMsg := make([]byte, len(input.Buffers[0]))
+			copy(origMsg, input.Buffers[0])
+			result, err := dp.ProcessPkt(tc.srcInterface, input, slayers.SCION{}, origMsg,
+				buffer)
+			tc.assertFunc(t, err)
+			if err != nil {
+				return
+			}
+			assert.NotNil(t, result.OutConn)
+			outPkt := &ipv4.Message{
+				Buffers: [][]byte{result.OutPkt},
+				Addr:    result.OutAddr,
+			}
+			assert.Equal(t, want, outPkt)
+		})
+	}
+}
+
+func TestDataPlaneSetColibriKey(t *testing.T) {
+	t.Run("fails after serve", func(t *testing.T) {
+		d := &router.DataPlane{}
+		d.FakeStart()
+		assert.Error(t, d.SetColibriKey([]byte("dummy")))
+	})
+	t.Run("setting nil value is not allowed", func(t *testing.T) {
+		d := &router.DataPlane{}
+		d.FakeStart()
+		assert.Error(t, d.SetColibriKey(nil))
+	})
+	t.Run("single set works", func(t *testing.T) {
+		d := &router.DataPlane{}
+		assert.NoError(t, d.SetColibriKey([]byte("dummy key xxxxxx")))
+	})
+	t.Run("double set fails", func(t *testing.T) {
+		d := &router.DataPlane{}
+		assert.NoError(t, d.SetColibriKey([]byte("dummy key xxxxxx")))
+		assert.Error(t, d.SetColibriKey([]byte("dummy key xxxxxx")))
+	})
+}
+
 func toMsg(t *testing.T, spkt *slayers.SCION, dpath path.Path) *ipv4.Message {
 	t.Helper()
 	ret := &ipv4.Message{}
@@ -1134,6 +1693,68 @@ func prepBaseMsg() (*slayers.SCION, *scion.Decoded) {
 	return spkt, dpath
 }
 
+func prepColibriBaseMsg(c, r, s bool, currHF, hfCount uint8, expTick,
+	tsRel uint32) (*slayers.SCION, *colibri.ColibriPath) {
+
+	// SCION common/address header
+	spkt := &slayers.SCION{
+		Version:      0,
+		TrafficClass: 0xb8,
+		FlowID:       0xdead,
+		NextHdr:      common.L4UDP,
+		PathType:     colibri.PathType,
+		DstIA:        xtest.MustParseIA("4-ff00:0:411"),
+		SrcIA:        xtest.MustParseIA("2-ff00:0:222"),
+		Path:         &colibri.ColibriPath{},
+	}
+	src := &net.IPAddr{IP: net.ParseIP("12.0.0.4").To4()}
+	_ = spkt.SetSrcAddr(src)
+	dst := &net.IPAddr{IP: net.ParseIP("10.0.0.3").To4()}
+	_ = spkt.SetDstAddr(dst)
+
+	// COLIBRI path type header
+	packetTimestamp := libcolibri.CreateColibriTimestamp(tsRel, 0, 4589)
+	cpath := &colibri.ColibriPath{
+		PacketTimestamp: packetTimestamp,
+		InfoField: &colibri.InfoField{
+			C:           c,
+			R:           r,
+			S:           s,
+			Ver:         uint8(0x12),
+			CurrHF:      currHF,
+			HFCount:     hfCount,
+			ResIdSuffix: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc},
+			ExpTick:     expTick,
+			BwCls:       uint8(0x34),
+			Rlc:         uint8(0x56),
+			OrigPayLen:  uint16(18),
+		},
+		HopFields: []*colibri.HopField{},
+	}
+	hfFirst := &colibri.HopField{
+		IngressId: 0,
+		EgressId:  1,
+		Mac:       []byte{0xff, 0xff, 0xff, 0xff},
+	}
+	cpath.HopFields = append(cpath.HopFields, hfFirst)
+	for i := 0; i < int(hfCount-2); i++ {
+		hf := &colibri.HopField{
+			IngressId: 1,
+			EgressId:  2,
+			Mac:       []byte{0xff, 0xff, 0xff, 0xff},
+		}
+		cpath.HopFields = append(cpath.HopFields, hf)
+	}
+	hfLast := &colibri.HopField{
+		IngressId: 1,
+		EgressId:  0,
+		Mac:       []byte{0xff, 0xff, 0xff, 0xff},
+	}
+	cpath.HopFields = append(cpath.HopFields, hfLast)
+
+	return spkt, cpath
+}
+
 func computeMAC(t *testing.T, key []byte, info *path.InfoField, hf *path.HopField) []byte {
 	mac, err := scrypto.InitMac(key)
 	require.NoError(t, err)
@@ -1144,6 +1765,28 @@ func computeMAC(t *testing.T, key []byte, info *path.InfoField, hf *path.HopFiel
 func createMac(t *testing.T) hash.Hash {
 	mac, err := scrypto.InitMac(make(common.RawBytes, 16))
 	xtest.FailOnErr(t, err)
+	return mac
+}
+
+func computeColibriMac(t *testing.T, c bool, key []byte, cpath *colibri.ColibriPath,
+	spkt *slayers.SCION, hopIndex uint8, packetTimestamp uint64) []byte {
+
+	var mac []byte
+	var err error
+
+	switch c {
+	case true:
+		mac, err = libcolibri.CalculateColibriMacStatic(key, cpath.InfoField,
+			cpath.HopFields[hopIndex], spkt)
+		require.NoError(t, err)
+	case false:
+		auth, err := libcolibri.CalculateColibriMacSigma(key, cpath.InfoField,
+			cpath.HopFields[hopIndex], spkt)
+		require.NoError(t, err)
+		mac, err = libcolibri.CalculateColibriMacPacket(auth, packetTimestamp, cpath.InfoField)
+		require.NoError(t, err)
+	}
+
 	return mac
 }
 

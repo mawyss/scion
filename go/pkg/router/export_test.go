@@ -37,6 +37,7 @@ func NewDP(
 		internal:         internal,
 	}
 	dp.SetKey(key)
+	dp.SetColibriKey(key)
 	return dp
 }
 

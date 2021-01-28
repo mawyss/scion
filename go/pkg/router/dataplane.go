@@ -39,6 +39,7 @@ import (
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
+	"github.com/scionproto/scion/go/lib/slayers/path/colibri"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
 	"github.com/scionproto/scion/go/lib/slayers/path/onehop"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
@@ -94,6 +95,7 @@ type DataPlane struct {
 	internalNextHops map[uint16]net.Addr
 	svc              *services
 	macFactory       func() hash.Hash
+	ColibriKey       []byte
 	bfdSessions      map[uint16]bfdSession
 	localIA          addr.IA
 	mtx              sync.Mutex
@@ -163,6 +165,25 @@ func (d *DataPlane) SetKey(key []byte) error {
 		mac, _ := scrypto.InitMac(key)
 		return mac
 	}
+	return nil
+}
+
+// SetColibriKey sets the key used for Colibri MAC verification. The key provided here should
+// already be derived as in scrypto.HFMacFactory.
+func (d *DataPlane) SetColibriKey(key []byte) error {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	if d.running {
+		return modifyExisting
+	}
+	if len(key) == 0 {
+		return emptyValue
+	}
+	if len(d.ColibriKey) != 0 {
+		return alreadySet
+	}
+
+	d.ColibriKey = key
 	return nil
 }
 
@@ -591,6 +612,8 @@ func (d *DataPlane) processPkt(ingressID uint16, rawPkt []byte, srcAddr net.Addr
 		return d.processOHP(ingressID, rawPkt, s, buffer)
 	case scion.PathType:
 		return d.processSCION(ingressID, rawPkt, s, origPacket, buffer)
+	case colibri.PathType:
+		return d.processCOLIBRI(ingressID, rawPkt, s, origPacket, buffer)
 	default:
 		return processResult{}, serrors.WithCtx(unsupportedPathType, "type", s.PathType)
 	}
@@ -662,6 +685,20 @@ func (d *DataPlane) processSCION(ingressID uint16, rawPkt []byte, s slayers.SCIO
 		buffer:     buffer,
 	}
 	return p.process()
+}
+
+func (d *DataPlane) processCOLIBRI(ingressID uint16, rawPkt []byte, s slayers.SCION,
+	origPacket []byte, buffer gopacket.SerializeBuffer) (processResult, error) {
+
+	c := colibriPacketProcessor{
+		d:          d,
+		ingressID:  ingressID,
+		rawPkt:     rawPkt,
+		scionLayer: s,
+		origPacket: origPacket,
+		buffer:     buffer,
+	}
+	return c.process()
 }
 
 type scionPacketProcessor struct {

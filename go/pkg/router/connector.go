@@ -133,6 +133,18 @@ func (c *Connector) SetKey(ia addr.IA, index int, key common.RawBytes) error {
 	return c.DataPlane.SetKey(key)
 }
 
+// SetColibriKey sets the Colibri key for the given ISD-AS at the given index.
+func (c *Connector) SetColibriKey(ia addr.IA, index int, key common.RawBytes) error {
+	log.Debug("Setting key", "isd_as", ia, "index", index)
+	if !c.ia.Equal(ia) {
+		return serrors.WithCtx(errMultiIA, "current", c.ia, "new", ia)
+	}
+	if index != 0 {
+		return serrors.New("currently only index 0 key is supported")
+	}
+	return c.DataPlane.SetColibriKey(key)
+}
+
 // SetRevocation sets the revocation for the given ISD-AS and interface.
 func (c *Connector) SetRevocation(ia addr.IA, ifID common.IFIDType, rev common.RawBytes) error {
 	if !c.ia.Equal(ia) {

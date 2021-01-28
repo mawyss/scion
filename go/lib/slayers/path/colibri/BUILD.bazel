@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "colibri.go",
+        "colibri_minimal.go",
+        "hopfield.go",
+        "infofield.go",
+    ],
+    importpath = "github.com/scionproto/scion/go/lib/slayers/path/colibri",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/lib/serrors:go_default_library",
+        "//go/lib/slayers/path:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "colibri_test.go",
+        "hopfield_test.go",
+        "infofield_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
+)

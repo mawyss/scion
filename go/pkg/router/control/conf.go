@@ -37,6 +37,7 @@ type Dataplane interface {
 	AddSvc(ia addr.IA, svc addr.HostSVC, ip net.IP) error
 	DelSvc(ia addr.IA, svc addr.HostSVC, ip net.IP) error
 	SetKey(ia addr.IA, index int, key common.RawBytes) error
+	SetColibriKey(ia addr.IA, index int, key common.RawBytes) error
 
 	SetRevocation(ia addr.IA, ifid common.IFIDType, rev common.RawBytes) error
 	DelRevocation(ia addr.IA, ifid common.IFIDType) error
@@ -77,6 +78,11 @@ func ConfigDataplane(dp Dataplane, cfg *Config) error {
 		if err := dp.SetKey(cfg.IA, 0, key0); err != nil {
 			return err
 		}
+
+		keyColibri := DeriveColibriKey(cfg.MasterKeys.Key0)
+		if err := dp.SetColibriKey(cfg.IA, 0, keyColibri); err != nil {
+			return err
+		}
 	}
 	// Add internal interfaces
 	if cfg.BR != nil {
@@ -104,6 +110,20 @@ func DeriveHFMacKey(k []byte) []byte {
 	}
 	// XXX Generate keys - MUST be kept in sync with go/lib/scrypto/mac.go
 	hfMacSalt := []byte("Derive OF Key")
+	// This uses 16B keys with 1000 hash iterations, which is the same as the
+	// defaults used by pycrypto.
+	return pbkdf2.Key(k, hfMacSalt, 1000, 16, sha256.New)
+}
+
+// DeriveColibriKey derives the private Colibri key from the given key.
+func DeriveColibriKey(k []byte) []byte {
+	// TODO(mawyss): Check if this is really necessary, or if we can just use the 
+	// go/lib/scrypto/mac.go implementation, as it is doing exactly the same.
+	if len(k) == 0 {
+		panic("empty key")
+	}
+	// XXX Generate keys - MUST be kept in sync with go/lib/scrypto/mac.go
+	hfMacSalt := []byte("Derive Colibri Key")
 	// This uses 16B keys with 1000 hash iterations, which is the same as the
 	// defaults used by pycrypto.
 	return pbkdf2.Key(k, hfMacSalt, 1000, 16, sha256.New)
