@@ -23,6 +23,7 @@ import (
 
 	base "github.com/scionproto/scion/go/cs/reservation"
 	"github.com/scionproto/scion/go/cs/reservation/segment"
+	"github.com/scionproto/scion/go/cs/reservationstorage/backend"
 	"github.com/scionproto/scion/go/cs/reservationstorage/backend/mock_backend"
 	"github.com/scionproto/scion/go/lib/colibri/reservation"
 	"github.com/scionproto/scion/go/lib/util"
@@ -181,14 +182,14 @@ func TestAvailableBW(t *testing.T) {
 		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			adm, finish := newTestAdmitter(t)
+			db, finish := newTestDB(t)
+			adm := newTestAdmitter(t)
 			defer finish()
 
 			adm.Delta = tc.delta
 			ctx := context.Background()
-			db := adm.DB.(*mock_backend.MockDB)
-			tc.setupDB(db)
-			avail, err := adm.availableBW(ctx, tc.req)
+			tc.setupDB(db.(*mock_backend.MockDB))
+			avail, err := adm.availableBW(ctx, db, tc.req)
 			require.NoError(t, err)
 			require.Equal(t, tc.availBW, avail)
 		})
@@ -303,20 +304,20 @@ func TestTubeRatio(t *testing.T) {
 		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			adm, finish := newTestAdmitter(t)
+			db, finish := newTestDB(t)
+			adm := newTestAdmitter(t)
 			defer finish()
 
 			adm.Capacities = &testCapacities{
 				Cap:    tc.globalCapacity,
 				Ifaces: tc.interfaces,
 			}
-			db := adm.DB.(*mock_backend.MockDB)
-			tc.setupDB(db)
+			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			demPerSrc, err := adm.computeTempDemands(ctx, tc.req.Ingress, tc.req)
+			demPerSrc, err := adm.computeTempDemands(ctx, db, tc.req.Ingress, tc.req)
 			require.NoError(t, err)
-			ratio, err := adm.tubeRatio(ctx, tc.req, demPerSrc)
+			ratio, err := adm.tubeRatio(ctx, db, tc.req, demPerSrc)
 			require.NoError(t, err)
 			require.Equal(t, tc.tubeRatio, ratio)
 		})
@@ -406,20 +407,20 @@ func TestLinkRatio(t *testing.T) {
 		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			adm, finish := newTestAdmitter(t)
+			db, finish := newTestDB(t)
+			adm := newTestAdmitter(t)
 			defer finish()
 
 			adm.Capacities = &testCapacities{
 				Cap:    1024 * 1024,
 				Ifaces: []uint16{1, 2, 3},
 			}
-			db := adm.DB.(*mock_backend.MockDB)
-			tc.setupDB(db)
+			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			demsPerSrc, err := adm.computeTempDemands(ctx, tc.req.Ingress, tc.req)
+			demsPerSrc, err := adm.computeTempDemands(ctx, db, tc.req.Ingress, tc.req)
 			require.NoError(t, err)
-			linkRatio, err := adm.linkRatio(ctx, tc.req, demsPerSrc)
+			linkRatio, err := adm.linkRatio(ctx, db, tc.req, demsPerSrc)
 			require.NoError(t, err)
 			require.Equal(t, tc.linkRatio, linkRatio)
 		})
@@ -440,18 +441,21 @@ func (c *testCapacities) Capacity(from, to uint16) uint64       { return c.Cap }
 func (c *testCapacities) CapacityIngress(ingress uint16) uint64 { return c.Cap }
 func (c *testCapacities) CapacityEgress(egress uint16) uint64   { return c.Cap }
 
-func newTestAdmitter(t *testing.T) (*StatelessAdmission, func()) {
+func newTestDB(t *testing.T) (backend.DB, func()) {
 	mctlr := gomock.NewController(t)
-
 	db := mock_backend.NewMockDB(mctlr)
+
+	return db, mctlr.Finish
+}
+
+func newTestAdmitter(t *testing.T) *StatelessAdmission {
 	return &StatelessAdmission{
-		DB: db,
 		Capacities: &testCapacities{
 			Cap:    1024, // 1MBps
 			Ifaces: []uint16{1, 2},
 		},
 		Delta: 1,
-	}, mctlr.Finish
+	}
 }
 
 // newTestRequest creates a request ID ff00:1:1 beefcafe

@@ -76,10 +76,14 @@ type ReserverAndTransit interface {
 	PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) error
 }
 
-type Transaction interface {
+type ColibriStorage interface {
 	ReserverOnly
 	TransitOnly
 	ReserverAndTransit
+}
+
+type Transaction interface {
+	ColibriStorage
 	Commit() error
 	Rollback() error
 }
@@ -87,9 +91,7 @@ type Transaction interface {
 // DB is the interface for any reservation backend.
 type DB interface {
 	BeginTransaction(ctx context.Context, opts *sql.TxOptions) (Transaction, error)
-	ReserverOnly
-	TransitOnly
-	ReserverAndTransit
+	ColibriStorage
 	db.LimitSetter
 	io.Closer
 }

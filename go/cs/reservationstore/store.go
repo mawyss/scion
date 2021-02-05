@@ -112,9 +112,10 @@ func (s *Store) AdmitSegmentReservation(ctx context.Context, req *segment.SetupR
 		return failedResponse, serrors.WrapStr("error validating end props and path type", err,
 			"id", req.ID)
 	}
+
 	// compute admission max BW
 	// TODO(juagargi) use the transaction also in the admitter
-	err = s.admitter.AdmitRsv(ctx, req)
+	err = s.admitter.AdmitRsv(ctx, tx, req)
 	if err != nil {
 		return failedResponse, serrors.WrapStr("segment not admitted", err, "id", req.ID,
 			"index", req.Index)

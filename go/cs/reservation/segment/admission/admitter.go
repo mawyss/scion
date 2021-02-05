@@ -18,11 +18,12 @@ import (
 	"context"
 
 	"github.com/scionproto/scion/go/cs/reservation/segment"
+	"github.com/scionproto/scion/go/cs/reservationstorage/backend"
 )
 
 // Admitter specifies what an admission entity has to implement to govern the segment admission.
 type Admitter interface {
 	// req will be modified with the allowed and maximum bandwidths if they were computed.
 	// It can also return an error.
-	AdmitRsv(ctx context.Context, req *segment.SetupReq) error
+	AdmitRsv(ctx context.Context, x backend.ColibriStorage, req *segment.SetupReq) error
 }

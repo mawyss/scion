@@ -23,6 +23,7 @@ go_test(
     deps = [
         "//go/cs/reservation:go_default_library",
         "//go/cs/reservation/segment:go_default_library",
+        "//go/cs/reservationstorage/backend:go_default_library",
         "//go/cs/reservationstorage/backend/mock_backend:go_default_library",
         "//go/lib/colibri/reservation:go_default_library",
         "//go/lib/util:go_default_library",

@@ -29,7 +29,6 @@ import (
 
 // StatelessAdmission can admit a segment reservation without any state other than the DB.
 type StatelessAdmission struct {
-	DB         backend.DB
 	Capacities base.Capacities // aka capacity matrix
 	Delta      float64         // fraction of free BW that can be reserved in one request
 }
@@ -38,12 +37,14 @@ var _ admission.Admitter = (*StatelessAdmission)(nil)
 
 // AdmitRsv admits a segment reservation. The request will be modified with the allowed and
 // maximum bandwidths if they were computed. It can also return an error that must be checked.
-func (a *StatelessAdmission) AdmitRsv(ctx context.Context, req *segment.SetupReq) error {
-	avail, err := a.availableBW(ctx, req)
+func (a *StatelessAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStorage,
+	req *segment.SetupReq) error {
+
+	avail, err := a.availableBW(ctx, x, req)
 	if err != nil {
 		return serrors.WrapStr("cannot compute available bandwidth", err, "segment_id", req.ID)
 	}
-	ideal, err := a.idealBW(ctx, req)
+	ideal, err := a.idealBW(ctx, x, req)
 	if err != nil {
 		return serrors.WrapStr("cannot compute ideal bandwidth", err, "segment_id", req.ID)
 	}
@@ -60,15 +61,15 @@ func (a *StatelessAdmission) AdmitRsv(ctx context.Context, req *segment.SetupReq
 	return nil
 }
 
-func (a *StatelessAdmission) availableBW(ctx context.Context, req *segment.SetupReq) (
-	uint64, error) {
+func (a *StatelessAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
+	req *segment.SetupReq) (uint64, error) {
 
-	sameIngress, err := a.DB.GetSegmentRsvsFromIFPair(ctx, &req.Ingress, nil)
+	sameIngress, err := x.GetSegmentRsvsFromIFPair(ctx, &req.Ingress, nil)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot get reservations using ingress", err,
 			"ingress", req.Ingress)
 	}
-	sameEgress, err := a.DB.GetSegmentRsvsFromIFPair(ctx, nil, &req.Egress)
+	sameEgress, err := x.GetSegmentRsvsFromIFPair(ctx, nil, &req.Egress)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot get reservations using egress", err,
 			"egress", req.Egress)
@@ -82,16 +83,18 @@ func (a *StatelessAdmission) availableBW(ctx context.Context, req *segment.Setup
 	return uint64(free * a.Delta), nil
 }
 
-func (a *StatelessAdmission) idealBW(ctx context.Context, req *segment.SetupReq) (uint64, error) {
-	demsPerSrcRegIngress, err := a.computeTempDemands(ctx, req.Ingress, req)
+func (a *StatelessAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
+	req *segment.SetupReq) (uint64, error) {
+
+	demsPerSrcRegIngress, err := a.computeTempDemands(ctx, x, req.Ingress, req)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute temporary demands", err)
 	}
-	tubeRatio, err := a.tubeRatio(ctx, req, demsPerSrcRegIngress)
+	tubeRatio, err := a.tubeRatio(ctx, x, req, demsPerSrcRegIngress)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute tube ratio", err)
 	}
-	linkRatio, err := a.linkRatio(ctx, req, demsPerSrcRegIngress)
+	linkRatio, err := a.linkRatio(ctx, x, req, demsPerSrcRegIngress)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute link ratio", err)
 	}
@@ -99,8 +102,8 @@ func (a *StatelessAdmission) idealBW(ctx context.Context, req *segment.SetupReq)
 	return uint64(cap * tubeRatio * linkRatio), nil
 }
 
-func (a *StatelessAdmission) tubeRatio(ctx context.Context, req *segment.SetupReq,
-	demsPerSrc demPerSource) (float64, error) {
+func (a *StatelessAdmission) tubeRatio(ctx context.Context, x backend.ColibriStorage,
+	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
 
 	// TODO(juagargi) to avoid calling several times to computeTempDemands, refactor the
 	// type holding the results, so that it stores capReqDem per source per ingress interface.
@@ -113,7 +116,7 @@ func (a *StatelessAdmission) tubeRatio(ctx context.Context, req *segment.SetupRe
 	numerator := minBW(capIn, transitDemand)
 	var sum uint64
 	for _, in := range a.Capacities.IngressInterfaces() {
-		demandsForThisIngress, err := a.computeTempDemands(ctx, in, req)
+		demandsForThisIngress, err := a.computeTempDemands(ctx, x, in, req)
 		if err != nil {
 			return 0, serrors.WrapStr("cannot compute transit demand", err)
 		}
@@ -126,8 +129,8 @@ func (a *StatelessAdmission) tubeRatio(ctx context.Context, req *segment.SetupRe
 	return float64(numerator) / float64(sum), nil
 }
 
-func (a *StatelessAdmission) linkRatio(ctx context.Context, req *segment.SetupReq,
-	demsPerSrc demPerSource) (float64, error) {
+func (a *StatelessAdmission) linkRatio(ctx context.Context, x backend.ColibriStorage,
+	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
 
 	capEg := a.Capacities.CapacityEgress(req.Egress)
 	demEg := demsPerSrc[req.ID.ASID].eg
@@ -146,7 +149,7 @@ func (a *StatelessAdmission) linkRatio(ctx context.Context, req *segment.SetupRe
 		}
 		egScalFctrs[src] = egScalFctr
 	}
-	rsvs, err := a.DB.GetAllSegmentRsvs(ctx)
+	rsvs, err := x.GetAllSegmentRsvs(ctx)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot list all reservations", err)
 	}
@@ -192,11 +195,11 @@ type demPerSource map[addr.AS]demands
 // this is, all cap. requested demands from all reservations, grouped by source, that enter
 // the AS at "ingress" and exit at "egress". It also stores all the source demands that enter
 // the AS at "ingress", and the source demands that exit the AS at "egress".
-func (a *StatelessAdmission) computeTempDemands(ctx context.Context, ingress uint16,
-	req *segment.SetupReq) (demPerSource, error) {
+func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
+	ingress uint16, req *segment.SetupReq) (demPerSource, error) {
 
 	// TODO(juagargi) consider adding a call to db to get all srcDem,inDem,egDem grouped by source
-	rsvs, err := a.DB.GetAllSegmentRsvs(ctx)
+	rsvs, err := x.GetAllSegmentRsvs(ctx)
 	if err != nil {
 		return nil, serrors.WrapStr("cannot obtain segment rsvs. from ingress/egress pair", err)
 	}

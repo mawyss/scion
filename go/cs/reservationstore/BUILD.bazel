@@ -4,7 +4,20 @@ go_test(
     name = "go_default_test",
     srcs = ["store_test.go"],
     embed = [":go_default_library"],
-    deps = ["//go/cs/reservationstorage:go_default_library"],
+    deps = [
+        "//go/cs/reservation:go_default_library",
+        "//go/cs/reservation/segment:go_default_library",
+        "//go/cs/reservation/segment/admission:go_default_library",
+        "//go/cs/reservation/segment/admission/impl:go_default_library",
+        "//go/cs/reservation/sqlite:go_default_library",
+        "//go/cs/reservation/test:go_default_library",
+        "//go/cs/reservationstorage:go_default_library",
+        "//go/cs/reservationstorage/backend:go_default_library",
+        "//go/lib/colibri/reservation:go_default_library",
+        "//go/lib/util:go_default_library",
+        "//go/lib/xtest:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
 )
 
 go_library(
