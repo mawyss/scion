@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	base "github.com/scionproto/scion/go/cs/reservation"
+	"github.com/scionproto/scion/go/cs/reservation/e2e"
 	"github.com/scionproto/scion/go/cs/reservation/segment"
 	"github.com/scionproto/scion/go/cs/reservation/segment/admission"
 	stateless "github.com/scionproto/scion/go/cs/reservation/segment/admission/impl"
@@ -47,14 +48,14 @@ func TestStore(t *testing.T) {
 	_ = s
 }
 
-func TestAdmitSegmentReservation(t *testing.T) {
+func TestDebugAdmitSegmentReservation(t *testing.T) {
 	db := newDB(t)
 	cap := newCapacities()
 	admitter := newAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
 
 	ctx := context.Background()
-	req := newTestRequest(t, 1, 2, 5, 7)
+	req := newTestSegmentRequest(t, 1, 2, 5, 7)
 
 	res, err := s.AdmitSegmentReservation(ctx, req)
 	_ = res
@@ -71,6 +72,10 @@ func TestPerformanceAdmitSegmentReservation(t *testing.T) {
 	}
 	columnTitles[0] = "#ASes"
 	toCSV(t, "segmentRsvNoOfASes.csv", columnTitles, Xs, values)
+}
+
+func TestDebugAdmitE2EReservation(t *testing.T) {
+	timeAdmitE2EReservation(t, 1)
 }
 
 // func TestPerformanceAdmitSegmentReservationAverages(t *testing.T) {
@@ -234,7 +239,7 @@ func benchmarkAdmitSegmentReservation(b *testing.B, count int) {
 
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		req := newTestRequest(b, 1, 2, 5, 7)
+		req := newTestSegmentRequest(b, 1, 2, 5, 7)
 		// req.AllocTrail = newAllocationBeads(1, 2)
 		trace.WithRegion(ctx, "AdmitSegmentReservation", func() {
 			_, err := s.AdmitSegmentReservation(ctx, req)
@@ -251,7 +256,7 @@ func timeAdmitSegmentReservation(t *testing.T, count int) time.Duration {
 
 	AddSegmentReservation(t, db, count)
 	ctx := context.Background()
-	req := newTestRequest(t, 1, 2, 5, 7)
+	req := newTestSegmentRequest(t, 1, 2, 5, 7)
 
 	t0 := time.Now()
 	_, err := s.AdmitSegmentReservation(ctx, req)
@@ -265,6 +270,33 @@ func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	cap := newCapacities()
 	admitter := newAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
+
+	AddSegmentReservation(t, db, 2)
+	ctx := context.Background()
+	req := newTestE2ERequest(t)
+	token, err := reservation.TokenFromRaw(
+		xtest.MustParseHexString("16ebdb4f0d042500003f001002bad1ce003f001002facade"))
+	require.NoError(t, err)
+	successfulReq := &e2e.SetupReqSuccess{
+		SetupReq: *req,
+		Token:    *token,
+	}
+	// activate segment reservations related to the e2e
+	seg, err := db.GetSegmentRsvFromID(ctx, segmentIDFromRaw(t, "ff000000000100000001"))
+	require.NoError(t, err)
+	idx, err := seg.NewIndexFromToken(token, 5, 5)
+	require.NoError(t, err)
+	err = seg.SetIndexConfirmed(idx)
+	require.NoError(t, err)
+	err = seg.SetIndexActive(idx)
+	require.NoError(t, err)
+	err = db.PersistSegmentRsv(ctx, seg)
+	require.NoError(t, err)
+
+	// now, actually perform the E2E admission
+	_, err = s.AdmitE2EReservation(ctx, successfulReq)
+	require.NoError(t, err)
+	return time.Second
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -307,12 +339,27 @@ func (c *testCapacities) Capacity(from, to uint16) uint64       { return c.Cap }
 func (c *testCapacities) CapacityIngress(ingress uint16) uint64 { return c.Cap }
 func (c *testCapacities) CapacityEgress(egress uint16) uint64   { return c.Cap }
 
+func segmentIDFromRaw(t testing.TB, rawID string) *reservation.SegmentID {
+	t.Helper()
+	ID, err := reservation.SegmentIDFromRaw(xtest.MustParseHexString(rawID))
+	require.NoError(t, err)
+	return ID
+}
+
+func e2eIDFromRaw(t testing.TB, ASID, suffix string) *reservation.E2EID {
+	t.Helper()
+	id, err := reservation.NewE2EID(xtest.MustParseAS(ASID), xtest.MustParseHexString(suffix))
+	require.NoError(t, err)
+	return id
+}
+
 // newTestRequest creates a request ID ff00:1:1 beefcafe
-func newTestRequest(t testing.TB, ingress, egress uint16,
+func newTestSegmentRequest(t testing.TB, ingress, egress uint16,
 	minBW, maxBW reservation.BWCls) *segment.SetupReq {
 
-	ID, err := reservation.SegmentIDFromRaw(xtest.MustParseHexString("ff0000010001beefcafe"))
-	require.NoError(t, err)
+	t.Helper()
+
+	ID := segmentIDFromRaw(t, "ff0000010001beefcafe")
 	path := test.NewTestPath()
 	meta, err := base.NewRequestMetadata(path)
 	require.NoError(t, err)
@@ -329,4 +376,23 @@ func newTestRequest(t testing.TB, ingress, egress uint16,
 		SplitCls:  2,
 		PathProps: reservation.StartLocal | reservation.EndLocal,
 	}
+}
+
+func newTestE2ERequest(t testing.TB) *e2e.SetupReq {
+	t.Helper()
+
+	id := e2eIDFromRaw(t, "ff00:0:1", "beefcafebeefcafebeef")
+	path := test.NewTestPath()
+	baseReq, err := e2e.NewRequest(util.SecsToTime(1), id, 1, path)
+	require.NoError(t, err)
+	segmentRsvs := []reservation.SegmentID{
+		*segmentIDFromRaw(t, "ff000000000100000001"),
+		*segmentIDFromRaw(t, "ff0000020002beefcafe"),
+		*segmentIDFromRaw(t, "ff0000030003beefcafe"),
+	}
+	ASCountPerSegment := []uint8{4, 4, 5}
+	trail := []reservation.BWCls{5, 5}
+	setup, err := e2e.NewSetupRequest(baseReq, segmentRsvs, ASCountPerSegment, 5, trail)
+	require.NoError(t, err)
+	return setup
 }
