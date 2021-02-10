@@ -340,6 +340,26 @@ func (x *executor) PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) erro
 	return nil
 }
 
+func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM seg_reservation`
+	var count int
+	err := x.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (x *executor) DebugCountE2ERsvs(ctx context.Context) (int, error) {
+	const query = `SELECT COUNT(*) FROM e2e_reservation`
+	var count int
+	err := x.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // newSuffix finds a segment reservation ID suffix not being used at the moment. Should be called
 // inside a transaction so the suffix is not used in the meantime, or fail.
 func newSuffix(ctx context.Context, x db.Sqler, ASID addr.AS) (uint32, error) {

@@ -150,6 +150,10 @@ func (id *E2EID) ToRaw() []byte {
 	return buf
 }
 
+func (id *E2EID) String() string {
+	return fmt.Sprintf("%s-%x", id.ASID, id.Suffix)
+}
+
 // Tick represents a slice of time of 4 seconds.
 type Tick uint32
 
