@@ -49,48 +49,106 @@ func TestStore(t *testing.T) {
 }
 
 func TestDebugAdmitSegmentReservation(t *testing.T) {
-	db := newDB(t)
-	cap := newCapacities()
-	admitter := newAdmitter(cap)
-	s := reservationstore.NewStore(db, admitter)
-
-	ctx := context.Background()
-	req := newTestSegmentRequest(t, 1, 2, 5, 7)
-
-	res, err := s.AdmitSegmentReservation(ctx, req)
-	_ = res
-	require.NoError(t, err)
-}
-
-func TestPerformanceAdmitSegmentReservation(t *testing.T) {
-	Xs := delta(1, 100, 1)
-	values := mapWithFunction(t,
-		repeatWithFilter(t, timeAdmitSegmentReservation, REPS, identity), Xs)
-	columnTitles := make([]string, REPS+1)
-	for i := 0; i < REPS; i++ {
-		columnTitles[i+1] = fmt.Sprintf("sample %d", i)
-	}
-	columnTitles[0] = "#ASes"
-	toCSV(t, "segmentRsvNoOfASes.csv", columnTitles, Xs, values)
+	timeAdmitSegmentReservation(t, 1)
 }
 
 func TestDebugAdmitE2EReservation(t *testing.T) {
 	timeAdmitE2EReservation(t, 1)
 }
 
-// func TestPerformanceAdmitSegmentReservationAverages(t *testing.T) {
-// 	Xs := delta(1, 100, 1)
-// 	values := mapWithFunction(t,
-// 		repeatWithFilter(t, timeAdmitSegmentReservation, REPS, getAverage), Xs)
-// 	toCSV(t, "averages.csv", []string{"#ASes", "ave. µsecs"}, Xs, values)
-// }
+type performanceTestCase struct {
+	TestName string
+	Xmin     int
+	Xmax     int
+	Xstride  int
+	Xlabel   string
+	YLabels  []string // leave empty to generate default "sample 1", "sample 2", ...
 
-// func TestPerformanceAdmitSegmentReservationQuartiles(t *testing.T) {
-// 	Xs := delta(1, 100, 1)
-// 	values := mapWithFunction(t,
-// 		repeatWithFilter(t, timeAdmitSegmentReservation, REPS, getQuartiles), Xs)
-// 	toCSV(t, "quartiles.csv", []string{"#ASes", "q1", "median", "q3"}, Xs, values)
-// }
+	Repetitions int
+	Function    func(*testing.T, int) time.Duration
+	Filter      func(*testing.T, []time.Duration) []time.Duration
+
+	DebugPrintProgress bool
+}
+
+func TestPerformanceCOLIBRI(t *testing.T) {
+
+	if os.Getenv("COLIBRI_PERF_TESTS") == "" {
+		t.SkipNow()
+	}
+
+	testCases := []performanceTestCase{
+		// {
+		// 	TestName:    "segmentAdmitManyASes",
+		// 	Xmin:        1,
+		// 	Xmax:        100,
+		// 	Xstride:     1,
+		// 	Xlabel:      "# ASes",
+		// 	Repetitions: REPS,
+		// 	Function:    timeAdmitSegmentReservation,
+		// 	Filter:      identity,
+		// },
+		// {
+		// 	TestName:    "segmentAdmitManyASesAverages",
+		// 	Xmin:        1,
+		// 	Xmax:        100,
+		// 	Xstride:     1,
+		// 	Xlabel:      "# ASes",
+		// 	YLabels:     []string{"ave. µsecs"},
+		// 	Repetitions: REPS,
+		// 	Function:    timeAdmitSegmentReservation,
+		// 	Filter:      getAverage,
+		// },
+		// {
+		// 	TestName:    "segmentAdmitManyASesQuartiles",
+		// 	Xmin:        1,
+		// 	Xmax:        100,
+		// 	Xstride:     1,
+		// 	Xlabel:      "# ASes",
+		// 	YLabels:     []string{"q1", "median", "q3"},
+		// 	Repetitions: REPS,
+		// 	Function:    timeAdmitSegmentReservation,
+		// 	Filter:      getQuartiles,
+		// },
+		{
+			TestName:           "e2eAdmitManyEndhosts",
+			Xmin:               1,
+			Xmax:               10000,
+			Xstride:            100,
+			Xlabel:             "# endhosts",
+			Repetitions:        REPS,
+			Function:           timeAdmitE2EReservation,
+			Filter:             identity,
+			DebugPrintProgress: true,
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.TestName, func(t *testing.T) {
+			t.Parallel()
+			doPerformanceTest(t, tc)
+		})
+	}
+}
+
+func doPerformanceTest(t *testing.T, tc performanceTestCase) {
+	Xs := delta(tc.Xmin, tc.Xmax, tc.Xstride)
+	values := mapWithFunction(t,
+		repeatWithFilter(t, tc.Function, tc.Repetitions, tc.Filter), Xs, tc.DebugPrintProgress)
+	var columnTitles []string
+	if len(tc.YLabels) > 0 {
+		columnTitles = append([]string{tc.Xlabel}, tc.YLabels...)
+	} else {
+		columnTitles = make([]string, tc.Repetitions+1)
+		columnTitles[0] = tc.Xlabel
+		for i := 0; i < len(values[0]); i++ {
+			columnTitles[i+1] = fmt.Sprintf("sample %d", i)
+		}
+	}
+	toCSV(t, fmt.Sprintf("%s.csv", tc.TestName), columnTitles, Xs, values)
+}
+
+/////////////////////////////////////////
 
 func delta(first, last, stride int) []int {
 	ret := make([]int, (last-first)/stride+1)
@@ -103,12 +161,17 @@ func delta(first, last, stride int) []int {
 
 func mapWithFunction(t *testing.T,
 	fn func(*testing.T, int) []time.Duration,
-	xValues []int) [][]time.Duration {
+	xValues []int,
+	printProgress bool) [][]time.Duration {
 
 	values := make([][]time.Duration, len(xValues))
+	// TODO worker pool here
 	for i, x := range xValues {
 		row := fn(t, x)
 		values[i] = row
+		if printProgress {
+			t.Logf("done [%v] %v\n", time.Now(), x)
+		}
 	}
 	return values
 }
@@ -121,6 +184,13 @@ func repeatWithFilter(t *testing.T,
 
 	ret := func(t *testing.T, x int) []time.Duration {
 		samples := make([]time.Duration, repeatCount)
+		// TODO worker pool here
+		// type results struct{
+		// 	iteration int
+		// 	result time.Duration
+		// }
+		// const numJobs = 10
+		// results := make (chan results, numJobs)
 		for i := 0; i < repeatCount; i++ {
 			samples[i] = sampler(t, x)
 		}
@@ -230,6 +300,8 @@ func toCSV(t *testing.T, filename string, columnTitles []string, xValues []int, 
 
 func benchmarkAdmitSegmentReservation(b *testing.B, count int) {
 	db := newDB(b)
+	defer db.Close()
+
 	cap := newCapacities()
 	admitter := newAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
@@ -267,6 +339,8 @@ func timeAdmitSegmentReservation(t *testing.T, count int) time.Duration {
 
 func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	db := newDB(t)
+	defer db.Close()
+
 	cap := newCapacities()
 	admitter := newAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
@@ -284,6 +358,7 @@ func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	// activate segment reservations related to the e2e
 	seg, err := db.GetSegmentRsvFromID(ctx, segmentIDFromRaw(t, "ff000000000100000001"))
 	require.NoError(t, err)
+	require.NotNil(t, seg)
 	idx, err := seg.NewIndexFromToken(token, 5, 5)
 	require.NoError(t, err)
 	err = seg.SetIndexConfirmed(idx)
@@ -293,10 +368,19 @@ func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	err = db.PersistSegmentRsv(ctx, seg)
 	require.NoError(t, err)
 
-	// now, actually perform the E2E admission
-	_, err = s.AdmitE2EReservation(ctx, successfulReq)
+	// add `count` E2E other segments in DB
+	AddE2EReservation(t, db, count)
+	backend := db.(*sqlite.Backend)
+	e2eRsvsCount, err := backend.DebugCountE2ERsvs(ctx)
 	require.NoError(t, err)
-	return time.Second
+	require.Equal(t, e2eRsvsCount, count)
+
+	// now perform the actual E2E admission
+	t0 := time.Now()
+	_, err = s.AdmitE2EReservation(ctx, successfulReq)
+	t1 := time.Since(t0)
+	require.NoError(t, err)
+	return t1
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -338,20 +422,6 @@ func (c *testCapacities) EgressInterfaces() []uint16            { return c.Iface
 func (c *testCapacities) Capacity(from, to uint16) uint64       { return c.Cap }
 func (c *testCapacities) CapacityIngress(ingress uint16) uint64 { return c.Cap }
 func (c *testCapacities) CapacityEgress(egress uint16) uint64   { return c.Cap }
-
-func segmentIDFromRaw(t testing.TB, rawID string) *reservation.SegmentID {
-	t.Helper()
-	ID, err := reservation.SegmentIDFromRaw(xtest.MustParseHexString(rawID))
-	require.NoError(t, err)
-	return ID
-}
-
-func e2eIDFromRaw(t testing.TB, ASID, suffix string) *reservation.E2EID {
-	t.Helper()
-	id, err := reservation.NewE2EID(xtest.MustParseAS(ASID), xtest.MustParseHexString(suffix))
-	require.NoError(t, err)
-	return id
-}
 
 // newTestRequest creates a request ID ff00:1:1 beefcafe
 func newTestSegmentRequest(t testing.TB, ingress, egress uint16,
