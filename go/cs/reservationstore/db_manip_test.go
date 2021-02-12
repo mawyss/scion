@@ -44,6 +44,7 @@ func AddSegmentReservation(t testing.TB, db backend.DB, count int) {
 	}
 }
 
+// AddE2EReservation ads `count` E2E reservations to the DB.
 func AddE2EReservation(t testing.TB, db backend.DB, count int) {
 	t.Helper()
 	ctx := context.Background()
@@ -62,6 +63,49 @@ func AddE2EReservation(t testing.TB, db backend.DB, count int) {
 		require.NoError(t, err)
 	}
 }
+
+// // AddE2EReservation ads `count` E2E reservations to the DB.
+// // Multithreaded approach.
+// func AddE2EReservation(t testing.TB, db backend.DB, count int) {
+// 	t.Helper()
+// 	ctx := context.Background()
+
+// 	finished := make(chan struct{}, count)
+// 	for i := 0; i < count; i++ {
+// 		i := i
+// 		go func(i int, done chan<- struct{}) {
+// 			t.Logf("debug i = %d step 1", i)
+// 			r := newTestE2EReservation(t)
+
+// 			tx, err := db.BeginTransaction(ctx, nil)
+// 			t.Logf("debug i = %d step 2", i)
+// 			defer tx.Rollback()
+
+// 			require.NoError(t, err)
+// 			auxBuff := make([]byte, 8)
+// 			binary.BigEndian.PutUint64(auxBuff, uint64(i+1))
+// 			copy(r.ID.Suffix[2:], auxBuff)
+// 			t.Logf("debug i = %d step 3", i)
+// 			for _, seg := range r.SegmentReservations {
+// 				err := tx.PersistSegmentRsv(ctx, seg)
+// 				require.NoError(t, err)
+// 			}
+// 			t.Logf("debug i = %d step 4", i)
+// 			err = tx.PersistE2ERsv(ctx, r)
+// 			require.NoError(t, err)
+// 			t.Logf("debug i = %d step 5", i)
+
+// 			err = tx.Commit()
+// 			require.NoError(t, err)
+// 			t.Logf("debug i = %d step 6", i)
+// 			done <- struct{}{}
+// 		}(i, finished)
+// 	}
+// 	for i := 0; i < count; i++ {
+// 		<-finished
+// 		t.Logf("#################################################################### DONE %d", i+1)
+// 	}
+// }
 
 func newTestSegmentReservation(t testing.TB) *segment.Reservation {
 	t.Helper()

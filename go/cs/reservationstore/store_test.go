@@ -79,15 +79,26 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 
 	testCases := []performanceTestCase{
 		// {
-		// 	TestName:    "segmentAdmitManyASes",
-		// 	Xmin:        1,
-		// 	Xmax:        100,
-		// 	Xstride:     1,
-		// 	Xlabel:      "# ASes",
-		// 	Repetitions: REPS,
-		// 	Function:    timeAdmitSegmentReservation,
-		// 	Filter:      identity,
+		// 	TestName:           "doNothing",
+		// 	Xmin:               1,
+		// 	Xmax:               50,
+		// 	Xstride:            1,
+		// 	Xlabel:             "X",
+		// 	Repetitions:        REPS,
+		// 	Function:           timeDoNothing,
+		// 	Filter:             identity,
+		// 	DebugPrintProgress: true,
 		// },
+		{
+			TestName:    "segmentAdmitManyASes",
+			Xmin:        1,
+			Xmax:        100,
+			Xstride:     1,
+			Xlabel:      "# ASes",
+			Repetitions: REPS,
+			Function:    timeAdmitSegmentReservation,
+			Filter:      identity,
+		},
 		// {
 		// 	TestName:    "segmentAdmitManyASesAverages",
 		// 	Xmin:        1,
@@ -113,8 +124,8 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		{
 			TestName:           "e2eAdmitManyEndhosts",
 			Xmin:               1,
-			Xmax:               10000,
-			Xstride:            100,
+			Xmax:               100,
+			Xstride:            1,
 			Xlabel:             "# endhosts",
 			Repetitions:        REPS,
 			Function:           timeAdmitE2EReservation,
@@ -165,16 +176,44 @@ func mapWithFunction(t *testing.T,
 	printProgress bool) [][]time.Duration {
 
 	values := make([][]time.Duration, len(xValues))
-	// TODO worker pool here
+	// TODO worker pool here. Monothreaded it takes 21.8s to process 1-100 e2e
 	for i, x := range xValues {
 		row := fn(t, x)
 		values[i] = row
 		if printProgress {
-			t.Logf("done [%v] %v\n", time.Now(), x)
+			t.Logf("[%v] done X = %v\n", time.Now().Format(time.StampMilli), x)
 		}
 	}
 	return values
 }
+
+// // multithreaded approach
+// func mapWithFunction(t *testing.T,
+// 	fn func(*testing.T, int) []time.Duration,
+// 	xValues []int,
+// 	printProgress bool) [][]time.Duration {
+
+// 	values := make([][]time.Duration, len(xValues))
+// 	outputs := make(chan []time.Duration, len(xValues))
+// 	for i, x := range xValues {
+// 		i, x := i, x
+// 		go func(t *testing.T, output chan<- []time.Duration) {
+// 			t.Logf("x=%v", x)
+// 			row := fn(t, x)
+// 			t.Logf("done with x = %v", x)
+// 			values[i] = row
+// 			output <- row
+// 		}(t, outputs)
+// 		// if printProgress {
+// 		// 	t.Logf("[%v] done X = %v\n", time.Now().Format(time.StampMilli), x)
+// 		// }
+
+// 	}
+// 	for _ = range xValues {
+// 		<-outputs
+// 	}
+// 	return values
+// }
 
 // returns a function applicable to map
 func repeatWithFilter(t *testing.T,
@@ -185,12 +224,6 @@ func repeatWithFilter(t *testing.T,
 	ret := func(t *testing.T, x int) []time.Duration {
 		samples := make([]time.Duration, repeatCount)
 		// TODO worker pool here
-		// type results struct{
-		// 	iteration int
-		// 	result time.Duration
-		// }
-		// const numJobs = 10
-		// results := make (chan results, numJobs)
 		for i := 0; i < repeatCount; i++ {
 			samples[i] = sampler(t, x)
 		}
@@ -198,6 +231,39 @@ func repeatWithFilter(t *testing.T,
 	}
 	return ret
 }
+
+// // multithreaded approach
+// // returns a function applicable to map
+// func repeatWithFilter(t *testing.T,
+// 	sampler func(*testing.T, int) time.Duration,
+// 	repeatCount int,
+// 	filter func(*testing.T, []time.Duration) []time.Duration) func(*testing.T, int) []time.Duration {
+
+// 	ret := func(t *testing.T, x int) []time.Duration {
+// 		samples := make([]time.Duration, repeatCount)
+// 		type result struct {
+// 			iteration int
+// 			result    time.Duration
+// 		}
+// 		outputs := make(chan result, repeatCount)
+// 		for i := 0; i < repeatCount; i++ {
+// 			i := i
+// 			go func(t *testing.T, output chan<- result) {
+// 				y := sampler(t, x)
+// 				output <- result{
+// 					iteration: i,
+// 					result:    y,
+// 				}
+// 			}(t, outputs)
+// 		}
+// 		for i := 0; i < repeatCount; i++ {
+// 			r := <-outputs
+// 			samples[r.iteration] = r.result
+// 		}
+// 		return filter(t, samples)
+// 	}
+// 	return ret
+// }
 
 func identity(t *testing.T, values []time.Duration) []time.Duration {
 	return values
@@ -322,6 +388,8 @@ func benchmarkAdmitSegmentReservation(b *testing.B, count int) {
 
 func timeAdmitSegmentReservation(t *testing.T, count int) time.Duration {
 	db := newDB(t)
+	defer db.Close()
+
 	cap := newCapacities()
 	admitter := newAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
@@ -339,6 +407,7 @@ func timeAdmitSegmentReservation(t *testing.T, count int) time.Duration {
 
 func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	db := newDB(t)
+	// db.SetMaxOpenConns(50)
 	defer db.Close()
 
 	cap := newCapacities()
@@ -381,6 +450,23 @@ func timeAdmitE2EReservation(t *testing.T, count int) time.Duration {
 	t1 := time.Since(t0)
 	require.NoError(t, err)
 	return t1
+}
+
+func timeDoNothing(t *testing.T, count int) time.Duration {
+	tt := 10 * time.Millisecond
+	time.Sleep(tt)
+
+	db := newDB(t)
+	db.SetMaxOpenConns(50)
+	defer db.Close()
+
+	cap := newCapacities()
+	admitter := newAdmitter(cap)
+	s := reservationstore.NewStore(db, admitter)
+	_ = s
+
+	AddE2EReservation(t, db, 50)
+	return tt
 }
 
 //////////////////////////////////////////////////////////////////////////////
