@@ -30,27 +30,27 @@ import (
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
-// AddSegmentReservation adds `count` segment reservation ff00:0:1-00000001 to `db`.
-func AddSegmentReservation(t testing.TB, db backend.DB, count int) {
+// AddSegmentReservation adds `count` segment reservation ASID-newsuffix to `db`.
+func AddSegmentReservation(t testing.TB, db backend.DB, ASID string, count int) {
 	t.Helper()
 	ctx := context.Background()
 
-	r := newTestSegmentReservation(t) // ff00:0:1, suffix=1
+	r := newTestSegmentReservation(t, ASID) // the suffix will be overwritten
 	for i := 0; i < count; i++ {
-		r.Path = segmenttest.NewPathFromComponents(0, "1-ff00:0:1", i, 1, "1-ff00:0:2", 0)
-		r.Indices = segment.Indices{}
+		r.Path = segmenttest.NewPathFromComponents(0, "1-"+ASID, i, 1, "1-ff00:0:2", 0)
+		// r.Indices = segment.Indices{}
 		err := db.NewSegmentRsv(ctx, r)
 		require.NoError(t, err, "iteration i = %d", i)
 	}
 }
 
 // AddE2EReservation ads `count` E2E reservations to the DB.
-func AddE2EReservation(t testing.TB, db backend.DB, count int) {
+func AddE2EReservation(t testing.TB, db backend.DB, ASID string, count int) {
 	t.Helper()
 	ctx := context.Background()
 
 	for i := 0; i < count; i++ {
-		r := newTestE2EReservation(t)
+		r := newTestE2EReservation(t, ASID)
 
 		auxBuff := make([]byte, 8)
 		binary.BigEndian.PutUint64(auxBuff, uint64(i+1))
@@ -64,54 +64,13 @@ func AddE2EReservation(t testing.TB, db backend.DB, count int) {
 	}
 }
 
-// // AddE2EReservation ads `count` E2E reservations to the DB.
-// // Multithreaded approach.
-// func AddE2EReservation(t testing.TB, db backend.DB, count int) {
-// 	t.Helper()
-// 	ctx := context.Background()
-
-// 	finished := make(chan struct{}, count)
-// 	for i := 0; i < count; i++ {
-// 		i := i
-// 		go func(i int, done chan<- struct{}) {
-// 			t.Logf("debug i = %d step 1", i)
-// 			r := newTestE2EReservation(t)
-
-// 			tx, err := db.BeginTransaction(ctx, nil)
-// 			t.Logf("debug i = %d step 2", i)
-// 			defer tx.Rollback()
-
-// 			require.NoError(t, err)
-// 			auxBuff := make([]byte, 8)
-// 			binary.BigEndian.PutUint64(auxBuff, uint64(i+1))
-// 			copy(r.ID.Suffix[2:], auxBuff)
-// 			t.Logf("debug i = %d step 3", i)
-// 			for _, seg := range r.SegmentReservations {
-// 				err := tx.PersistSegmentRsv(ctx, seg)
-// 				require.NoError(t, err)
-// 			}
-// 			t.Logf("debug i = %d step 4", i)
-// 			err = tx.PersistE2ERsv(ctx, r)
-// 			require.NoError(t, err)
-// 			t.Logf("debug i = %d step 5", i)
-
-// 			err = tx.Commit()
-// 			require.NoError(t, err)
-// 			t.Logf("debug i = %d step 6", i)
-// 			done <- struct{}{}
-// 		}(i, finished)
-// 	}
-// 	for i := 0; i < count; i++ {
-// 		<-finished
-// 		t.Logf("#################################################################### DONE %d", i+1)
-// 	}
-// }
-
-func newTestSegmentReservation(t testing.TB) *segment.Reservation {
+// newTestSegmentReservation creates a segment reservation
+func newTestSegmentReservation(t testing.TB, ASID string) *segment.Reservation {
 	t.Helper()
 	r := segment.NewReservation()
 	r.Path = segment.ReservationTransparentPath{}
-	r.ID.ASID = xtest.MustParseAS("ff00:0:1")
+	// r.ID.ASID = xtest.MustParseAS("ff00:0:1")
+	r.ID.ASID = xtest.MustParseAS(ASID)
 	r.Ingress = 0
 	r.Egress = 1
 	r.TrafficSplit = 3
@@ -121,19 +80,21 @@ func newTestSegmentReservation(t testing.TB) *segment.Reservation {
 	require.NoError(t, err)
 	err = r.SetIndexConfirmed(0)
 	require.NoError(t, err)
+	err = r.SetIndexActive(0)
+	require.NoError(t, err)
 	return r
 }
 
 // newTestE2EReservation adds an E2E reservation, that uses three segment reservations on
-// ff00:1:1-00000001, ff00:2:2-00000002 and ff00:3:3-00000003 .
+// ASID-00000001, ff00:2:2-00000002 and ff00:3:3-00000003 .
 // The E2E reservation is transit on the first leg.
-func newTestE2EReservation(t testing.TB) *e2e.Reservation {
+func newTestE2EReservation(t testing.TB, ASID string) *e2e.Reservation {
 	t.Helper()
 
 	rsv := &e2e.Reservation{
-		ID: *e2eIDFromRaw(t, "ff00:1:1", "00000000000000000001"),
+		ID: *e2eIDFromRaw(t, ASID, "00000000000000000001"),
 		SegmentReservations: []*segment.Reservation{
-			newTestSegmentReservation(t),
+			newTestSegmentReservation(t, ASID),
 			// newTestSegmentReservation(t), // TODO change 2nd and 3rd seg rsvs.
 			// newTestSegmentReservation(t),
 		},
@@ -155,16 +116,16 @@ func newAllocationBeads(beads ...reservation.BWCls) reservation.AllocationBeads 
 	return ret
 }
 
-func segmentIDFromRaw(t testing.TB, rawID string) *reservation.SegmentID {
+func segmentIDFromRaw(t testing.TB, ASID, suffix string) *reservation.SegmentID {
 	t.Helper()
-	ID, err := reservation.SegmentIDFromRaw(xtest.MustParseHexString(rawID))
+	ID, err := reservation.NewSegmentID(xtest.MustParseAS(ASID), xtest.MustParseHexString(suffix))
 	require.NoError(t, err)
 	return ID
 }
 
 func e2eIDFromRaw(t testing.TB, ASID, suffix string) *reservation.E2EID {
 	t.Helper()
-	id, err := reservation.NewE2EID(xtest.MustParseAS(ASID), xtest.MustParseHexString(suffix))
+	ID, err := reservation.NewE2EID(xtest.MustParseAS(ASID), xtest.MustParseHexString(suffix))
 	require.NoError(t, err)
-	return id
+	return ID
 }
