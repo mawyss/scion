@@ -249,9 +249,8 @@ func (a *StatelessAdmission) transitDemand(ctx context.Context, req *segment.Set
 
 	capIn := a.Capacities.CapacityIngress(ingress)
 	capEg := a.Capacities.CapacityEgress(req.Egress)
-	// TODO(juagargi) adjSrcDem is not needed, remove after finishing debugging the admission
-	adjSrcDem := make(map[addr.AS]uint64) // every adjSrcDem grouped by source
-	for src, dems := range demsPerSrc {
+	var transitDem uint64
+	for _, dems := range demsPerSrc {
 		var inScalFctr float64 = 1.
 		if dems.in != 0 {
 			inScalFctr = float64(minBW(capIn, dems.in)) / float64(dems.in)
@@ -260,14 +259,8 @@ func (a *StatelessAdmission) transitDemand(ctx context.Context, req *segment.Set
 		if dems.eg != 0 {
 			egScalFctr = float64(minBW(capEg, dems.eg)) / float64(dems.eg)
 		}
-		adjSrcDem[src] = uint64(math.Min(inScalFctr, egScalFctr) * float64(dems.src))
+		transitDem += uint64(math.Min(inScalFctr, egScalFctr) * float64(dems.src))
 	}
-	// now reduce adjSrcDem
-	var transitDem uint64
-	for _, dem := range adjSrcDem {
-		transitDem += dem
-	}
-
 	return transitDem, nil
 }
 
