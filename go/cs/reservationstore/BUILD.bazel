@@ -2,18 +2,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "db_manip_test.go",
-        "store_test.go",
-    ],
+    srcs = ["store_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/cs/reservation:go_default_library",
-        "//go/cs/reservation/e2e:go_default_library",
         "//go/cs/reservation/segment:go_default_library",
         "//go/cs/reservation/segment/admission:go_default_library",
         "//go/cs/reservation/segment/admission/impl:go_default_library",
-        "//go/cs/reservation/segmenttest:go_default_library",
         "//go/cs/reservation/sqlite:go_default_library",
         "//go/cs/reservation/test:go_default_library",
         "//go/cs/reservationstorage:go_default_library",
