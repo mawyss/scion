@@ -340,6 +340,23 @@ func (x *executor) PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) erro
 	return nil
 }
 
+func (x *executor) GetDemandsPerSource(ctx context.Context,
+	ingress, egress uint16) (map[addr.AS][]*segment.Reservation, error) {
+
+	demPerSource := make(map[addr.AS][]*segment.Reservation)
+
+	rsvs, err := getSegReservations(ctx, x.db, "WHERE ingress=? OR egress=?",
+		[]interface{}{ingress, egress})
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rsvs {
+		demPerSource[r.ID.ASID] = append(demPerSource[r.ID.ASID], r)
+	}
+
+	return demPerSource, nil
+}
+
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
 	const query = `SELECT COUNT(*) FROM seg_reservation`
 	var count int

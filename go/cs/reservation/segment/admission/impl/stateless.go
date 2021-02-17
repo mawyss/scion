@@ -172,11 +172,7 @@ func (a *StatelessAdmission) linkRatio(ctx context.Context, x backend.ColibriSto
 		if src == req.ID.ASID {
 			srcAlloc += prevBW
 		}
-		egScalFctr, found := egScalFctrs[src]
-		if !found {
-			return 0, serrors.New("cannot compute link ratio, internal error: "+
-				"source not found in the egress scale factors", "src", src)
-		}
+		egScalFctr := egScalFctrs[src] // if not in egScalFctrs, it must be zero
 		denom += float64(srcAlloc) * egScalFctr
 	}
 	return numerator / denom, nil
@@ -198,32 +194,34 @@ type demPerSource map[addr.AS]demands
 func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
 	ingress uint16, req *segment.SetupReq) (demPerSource, error) {
 
-	// TODO(juagargi) consider adding a call to db to get all srcDem,inDem,egDem grouped by source
-	rsvs, err := x.GetAllSegmentRsvs(ctx)
+	capIn := a.Capacities.CapacityIngress(ingress)
+	capEg := a.Capacities.CapacityEgress(req.Egress)
+
+	rsvs, err := x.GetDemandsPerSource(ctx, ingress, req.Egress)
 	if err != nil {
 		return nil, serrors.WrapStr("cannot obtain segment rsvs. from ingress/egress pair", err)
 	}
-	capIn := a.Capacities.CapacityIngress(ingress)
-	capEg := a.Capacities.CapacityEgress(req.Egress)
-	// srcDem, inDem and egDem grouped by source
-	demsPerSrc := make(demPerSource)
-	for _, rsv := range rsvs {
-		if rsv.ID == req.ID {
-			continue
+	demsPerSrc := make(demPerSource, len(rsvs))
+	for asid, rsvs := range rsvs {
+		bucket := demands{}
+		for _, rsv := range rsvs {
+			dem := min3BW(capIn, capEg, rsv.MaxRequestedBW()) // capReqDem in the formulas
+			if rsv.ID == req.ID {
+				continue
+			}
+			if rsv.Ingress == ingress {
+				bucket.in += dem
+			}
+			if rsv.Egress == req.Egress {
+				bucket.eg += dem
+			}
+			if rsv.Ingress == ingress && rsv.Egress == req.Egress {
+				bucket.src += dem
+			}
 		}
-		dem := min3BW(capIn, capEg, rsv.MaxRequestedBW()) // capReqDem in the formulas
-		bucket := demsPerSrc[rsv.ID.ASID]
-		if rsv.Ingress == ingress {
-			bucket.in += dem
-		}
-		if rsv.Egress == req.Egress {
-			bucket.eg += dem
-		}
-		if rsv.Ingress == ingress && rsv.Egress == req.Egress {
-			bucket.src += dem
-		}
-		demsPerSrc[rsv.ID.ASID] = bucket
+		demsPerSrc[asid] = bucket
 	}
+
 	// add the request itself to whatever we have for that source
 	bucket := demsPerSrc[req.ID.ASID]
 	dem := min3BW(capIn, capEg, req.MaxBW.ToKbps())

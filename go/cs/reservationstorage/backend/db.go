@@ -76,10 +76,20 @@ type ReserverAndTransit interface {
 	PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) error
 }
 
+// OptimizedStore is implemented by all DBs.
+type OptimizedStore interface {
+	// GetDemandsPerSource returns the demands grouped by source, that have this ingress OR egress.
+	// TODO(juagargi):
+	// For now it only returns the slice of reservations, not the demands. The demands will have
+	// to be computed at the caller of this function.
+	GetDemandsPerSource(ctx context.Context, ingress, egress uint16) (
+		map[addr.AS][]*segment.Reservation, error)
+}
 type ColibriStorage interface {
 	ReserverOnly
 	TransitOnly
 	ReserverAndTransit
+	OptimizedStore
 }
 
 type Transaction interface {

@@ -52,6 +52,7 @@ func TestDB(t *testing.T, db TestableDB) {
 		"persist e2e reservation":                testPersistE2ERsv,
 		"get e2e reservation from ID":            testGetE2ERsvFromID,
 		"get e2e reservations from segment ones": testGetE2ERsvsOnSegRsv,
+		"get demands grouped by source":          testGetDemandsPerSource,
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -640,6 +641,38 @@ func testGetE2ERsvsOnSegRsv(ctx context.Context, t *testing.T, db backend.DB) {
 	rsvs, err = db.GetE2ERsvsOnSegRsv(ctx, &s2.ID)
 	require.NoError(t, err)
 	require.ElementsMatch(t, rsvs, []*e2e.Reservation{e2, e3})
+}
+
+func testGetDemandsPerSource(ctx context.Context, t *testing.T, db backend.DB) {
+	// similar to testGetSegmentRsvsFromIFPair: three rsvs: [in1,e1] ; [in2,e1] ; [in1,e2]
+	r1 := newTestReservation(t)
+	r1.Ingress = 11
+	r1.Egress = 12
+	err := db.NewSegmentRsv(ctx, r1)
+	require.NoError(t, err)
+	r2 := newTestReservation(t)
+	r2.Ingress = 21
+	r2.Egress = 12
+	err = db.NewSegmentRsv(ctx, r2)
+	require.NoError(t, err)
+	r3 := newTestReservation(t)
+	r3.Ingress = 11
+	r3.Egress = 22
+	err = db.NewSegmentRsv(ctx, r3)
+	require.NoError(t, err)
+
+	// query empty set
+	rsvs, err := db.GetDemandsPerSource(ctx, 10, 10)
+	require.NoError(t, err)
+	require.Empty(t, rsvs)
+
+	// group 1 and 3
+	rsvs, err = db.GetDemandsPerSource(ctx, 11, 10)
+	require.NoError(t, err)
+	require.Len(t, rsvs, 1)
+	require.Contains(t, rsvs, r1.ID.ASID)
+	require.Len(t, rsvs[r1.ID.ASID], 2)
+	require.ElementsMatch(t, rsvs[r1.ID.ASID], []*segment.Reservation{r1, r3})
 }
 
 // newToken just returns a token that can be serialized. This one has two HopFields.

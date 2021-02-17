@@ -113,6 +113,21 @@ func (mr *MockDBMockRecorder) GetAllSegmentRsvs(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllSegmentRsvs", reflect.TypeOf((*MockDB)(nil).GetAllSegmentRsvs), arg0)
 }
 
+// GetDemandsPerSource mocks base method
+func (m *MockDB) GetDemandsPerSource(arg0 context.Context, arg1, arg2 uint16) (map[addr.AS][]*segment.Reservation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDemandsPerSource", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[addr.AS][]*segment.Reservation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDemandsPerSource indicates an expected call of GetDemandsPerSource
+func (mr *MockDBMockRecorder) GetDemandsPerSource(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDemandsPerSource", reflect.TypeOf((*MockDB)(nil).GetDemandsPerSource), arg0, arg1, arg2)
+}
+
 // GetE2ERsvFromID mocks base method
 func (m *MockDB) GetE2ERsvFromID(arg0 context.Context, arg1 *reservation.E2EID) (*e2e.Reservation, error) {
 	m.ctrl.T.Helper()
@@ -348,6 +363,21 @@ func (m *MockTransaction) GetAllSegmentRsvs(arg0 context.Context) ([]*segment.Re
 func (mr *MockTransactionMockRecorder) GetAllSegmentRsvs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllSegmentRsvs", reflect.TypeOf((*MockTransaction)(nil).GetAllSegmentRsvs), arg0)
+}
+
+// GetDemandsPerSource mocks base method
+func (m *MockTransaction) GetDemandsPerSource(arg0 context.Context, arg1, arg2 uint16) (map[addr.AS][]*segment.Reservation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDemandsPerSource", arg0, arg1, arg2)
+	ret0, _ := ret[0].(map[addr.AS][]*segment.Reservation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDemandsPerSource indicates an expected call of GetDemandsPerSource
+func (mr *MockTransactionMockRecorder) GetDemandsPerSource(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDemandsPerSource", reflect.TypeOf((*MockTransaction)(nil).GetDemandsPerSource), arg0, arg1, arg2)
 }
 
 // GetE2ERsvFromID mocks base method
