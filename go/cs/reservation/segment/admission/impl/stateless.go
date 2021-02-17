@@ -230,7 +230,7 @@ func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.C
 	if req.Ingress == ingress {
 		bucket.in += dem
 	}
-	if req.Egress == req.Egress {
+	if req.Egress == req.Egress { // XXX(juagargi) TODO(juagargi)  Whaaaaa???
 		bucket.eg += dem
 	}
 	if req.Ingress == ingress && req.Egress == req.Egress {

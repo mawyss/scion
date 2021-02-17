@@ -114,7 +114,6 @@ func (s *Store) AdmitSegmentReservation(ctx context.Context, req *segment.SetupR
 	}
 
 	// compute admission max BW
-	// TODO(juagargi) use the transaction also in the admitter
 	err = s.admitter.AdmitRsv(ctx, tx, req)
 	if err != nil {
 		return failedResponse, serrors.WrapStr("segment not admitted", err, "id", req.ID,
