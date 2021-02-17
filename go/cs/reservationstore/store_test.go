@@ -19,6 +19,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"runtime/pprof"
 	"runtime/trace"
 	"sort"
 	"testing"
@@ -102,85 +103,85 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Function:           timeAdmitSegmentReservationManyRsvsSameAS,
 			Filter:             identity,
 			DebugPrintProgress: true,
-			DebugSkipExec:      true,
+			DebugSkipExec:      false,
 		},
 		//////////////
 		//
 		//     the following cases contain a total of 1000 reservations + count
 		//
 		////////////////
-		// {
-		// 	TestName:    "segmentAdmission_0_percent",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# Other ASes",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		ratio := 0.0
-		// 		differentSrcASesCount := float64(count) * ratio / 100.0
-		// 		sameSourceASID := count - int(differentSrcASesCount)
-		// 		return timeAdmitSegmentReservationTwoDimensions(t,
-		// 			sameSourceASID, int(differentSrcASesCount))
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-		// {
-		// 	TestName:    "segmentAdmission_10_percent",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# Other ASes",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		ratio := 10.0
-		// 		differentSrcASesCount := float64(count) * ratio / 100.0
-		// 		sameSourceASID := count - int(differentSrcASesCount)
-		// 		return timeAdmitSegmentReservationTwoDimensions(t,
-		// 			sameSourceASID, int(differentSrcASesCount))
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-		// {
-		// 	TestName:    "segmentAdmission_50_percent",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# Other ASes",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		ratio := 50.0
-		// 		differentSrcASesCount := float64(count) * ratio / 100.0
-		// 		sameSourceASID := count - int(differentSrcASesCount)
-		// 		return timeAdmitSegmentReservationTwoDimensions(t,
-		// 			sameSourceASID, int(differentSrcASesCount))
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-		// {
-		// 	TestName:    "segmentAdmission_90_percent",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# Other ASes",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		ratio := 90.0
-		// 		differentSrcASesCount := float64(count) * ratio / 100.0
-		// 		sameSourceASID := count - int(differentSrcASesCount)
-		// 		return timeAdmitSegmentReservationTwoDimensions(t,
-		// 			sameSourceASID, int(differentSrcASesCount))
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
+		{
+			TestName:    "segmentAdmission_0_percent",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# Other ASes",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				ratio := 0.0
+				differentSrcASesCount := float64(count) * ratio / 100.0
+				sameSourceASID := count - int(differentSrcASesCount)
+				return timeAdmitSegmentReservationTwoDimensions(t,
+					sameSourceASID, int(differentSrcASesCount))
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
+		{
+			TestName:    "segmentAdmission_10_percent",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# Other ASes",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				ratio := 10.0
+				differentSrcASesCount := float64(count) * ratio / 100.0
+				sameSourceASID := count - int(differentSrcASesCount)
+				return timeAdmitSegmentReservationTwoDimensions(t,
+					sameSourceASID, int(differentSrcASesCount))
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
+		{
+			TestName:    "segmentAdmission_50_percent",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# Other ASes",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				ratio := 50.0
+				differentSrcASesCount := float64(count) * ratio / 100.0
+				sameSourceASID := count - int(differentSrcASesCount)
+				return timeAdmitSegmentReservationTwoDimensions(t,
+					sameSourceASID, int(differentSrcASesCount))
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
+		{
+			TestName:    "segmentAdmission_90_percent",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# Other ASes",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				ratio := 90.0
+				differentSrcASesCount := float64(count) * ratio / 100.0
+				sameSourceASID := count - int(differentSrcASesCount)
+				return timeAdmitSegmentReservationTwoDimensions(t,
+					sameSourceASID, int(differentSrcASesCount))
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
 
 		{
 			TestName:    "e2eAdmit_1",
@@ -526,10 +527,18 @@ func timeAdmitSegmentReservationTwoDimensions(t *testing.T,
 	ctx := context.Background()
 	req := newTestSegmentRequest(t, thisASID, 1, 2, 5, 7)
 
+	// // profile here
+	// file, err := os.Create("admission_profile.pprof")
+	// require.NoError(t, err)
+	// err = pprof.StartCPUProfile(file)
+	// require.NoError(t, err)
+	// //
 	t0 := time.Now()
 	_, err := s.AdmitSegmentReservation(ctx, req)
 	t1 := time.Since(t0)
 	require.NoError(t, err)
+	//
+	pprof.StopCPUProfile()
 	return t1
 }
 
