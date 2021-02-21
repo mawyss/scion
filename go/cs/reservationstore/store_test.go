@@ -19,7 +19,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"runtime/pprof"
 	"runtime/trace"
 	"sort"
 	"testing"
@@ -51,7 +50,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestDebugAdmitSegmentReservation(t *testing.T) {
-	timeAdmitSegmentReservationManyRsvsSameAS(t, 100)
+	timeAdmitSegmentReservationManyRsvsSameAS(t, 1)
 	// timeAdmitSegmentReservationManySourceASes(t, 100)
 }
 
@@ -103,13 +102,11 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Function:           timeAdmitSegmentReservationManyRsvsSameAS,
 			Filter:             identity,
 			DebugPrintProgress: true,
-			DebugSkipExec:      false,
+			DebugSkipExec:      true,
 		},
 		//////////////
-		//
-		//     the following cases contain a total of 1000 reservations + count
-		//
-		////////////////
+		//    Segment
+		//////////////
 		{
 			TestName:    "segmentAdmission_0_percent",
 			Xmin:        0,
@@ -183,65 +180,55 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			DebugPrintProgress: true,
 		},
 
-		{
-			TestName:    "e2eAdmit_1",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
-			Repetitions: REPS,
-			Function: func(t *testing.T, count int) time.Duration {
-				existingSegments := 1
-				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-			},
-			Filter:             getAverage,
-			DebugPrintProgress: true,
-			DebugSkipExec:      true,
-		},
-		{
-			TestName:    "e2eAdmit_5000",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
-			Repetitions: REPS,
-			Function: func(t *testing.T, count int) time.Duration {
-				existingSegments := 5000
-				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-			},
-			Filter:             getAverage,
-			DebugPrintProgress: true,
-			DebugSkipExec:      true,
-		},
-		{
-			TestName:    "e2eAdmit_10000",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
-			Repetitions: REPS,
-			Function: func(t *testing.T, count int) time.Duration {
-				existingSegments := 10000
-				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-			},
-			Filter:             getAverage,
-			DebugPrintProgress: true,
-			DebugSkipExec:      true,
-		},
+		///////////////////////
+		//   E2E
+		///////////////////////
 		// {
-		// 	TestName:           "e2eAdmitManySegments",
-		// 	Xmin:               1,
-		// 	Xmax:               100,
-		// 	Xstride:            1,
-		// 	Xlabel:             "# ASes",
-		// 	Repetitions:        REPS,
-		// 	Function:           timeAdmitE2EReservationManySegments,
-		// 	Filter:             identity,
-		// 	DebugPrintProgress: false,
+		// 	TestName:    "e2eAdmit_1",
+		// 	Xmin:        0,
+		// 	Xmax:        10000,
+		// 	Xstride:     2000,
+		// 	Xlabel:      "# endhosts",
+		// 	YLabels:     []string{"ave. µsecs"},
+		// 	Repetitions: REPS,
+		// 	Function: func(t *testing.T, count int) time.Duration {
+		// 		existingSegments := 1
+		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+		// 	},
+		// 	Filter:             getAverage,
+		// 	DebugPrintProgress: true,
 		// },
+		// {
+		// 	TestName:    "e2eAdmit_5000",
+		// 	Xmin:        0,
+		// 	Xmax:        10000,
+		// 	Xstride:     2000,
+		// 	Xlabel:      "# endhosts",
+		// 	YLabels:     []string{"ave. µsecs"},
+		// 	Repetitions: REPS,
+		// 	Function: func(t *testing.T, count int) time.Duration {
+		// 		existingSegments := 5000
+		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+		// 	},
+		// 	Filter:             getAverage,
+		// 	DebugPrintProgress: true,
+		// },
+		// {
+		// 	TestName:    "e2eAdmit_10000",
+		// 	Xmin:        0,
+		// 	Xmax:        10000,
+		// 	Xstride:     2000,
+		// 	Xlabel:      "# endhosts",
+		// 	YLabels:     []string{"ave. µsecs"},
+		// 	Repetitions: REPS,
+		// 	Function: func(t *testing.T, count int) time.Duration {
+		// 		existingSegments := 10000
+		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+		// 	},
+		// 	Filter:             getAverage,
+		// 	DebugPrintProgress: true,
+		// },
+
 	}
 	for _, tc := range testCases {
 		if tc.DebugSkipExec {
@@ -526,19 +513,29 @@ func timeAdmitSegmentReservationTwoDimensions(t *testing.T,
 
 	ctx := context.Background()
 	req := newTestSegmentRequest(t, thisASID, 1, 2, 5, 7)
-
-	// // profile here
-	// file, err := os.Create("admission_profile.pprof")
+	var err error
+	//
+	// profile here
+	//
+	// blockProfile, err := os.Create("admission_block-profile.pprof")
 	// require.NoError(t, err)
-	// err = pprof.StartCPUProfile(file)
+	// runtime.SetBlockProfileRate(10)
+	//
+	// cpuProfile, err := os.Create("admission_cpu-profile.pprof")
 	// require.NoError(t, err)
-	// //
+	// err = pprof.StartCPUProfile(cpuProfile)
+	// require.NoError(t, err)
+	//
+	//
 	t0 := time.Now()
-	_, err := s.AdmitSegmentReservation(ctx, req)
+	_, err = s.AdmitSegmentReservation(ctx, req)
 	t1 := time.Since(t0)
 	require.NoError(t, err)
 	//
-	pprof.StopCPUProfile()
+	// pprof.StopCPUProfile()
+	// err = pprof.Lookup("block").WriteTo(blockProfile, 1)
+	// require.NoError(t, err)
+	//
 	return t1
 }
 
