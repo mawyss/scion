@@ -357,6 +357,51 @@ func (x *executor) GetDemandsPerSource(ctx context.Context,
 	return demPerSource, nil
 }
 
+func (x *executor) GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reservation.SegmentID) (
+	map[addr.AS]uint64, error) {
+
+	// XXX(juagargi) to use a select from select and compute the bandwidth from the bandwidth class
+	// we have to use user defined functions in sqlite, which is a pain, and probably
+	// not worth the uncleanliness
+	query := `SELECT
+		rsv.id_as,
+		MAX(idx.alloc_bw)
+	FROM seg_reservation rsv
+	INNER JOIN seg_index idx ON rsv.ROWID = idx.reservation
+	WHERE (rsv.id_as != ? OR rsv.id_suffix != ?)
+	GROUP BY rsv.id_as, rsv.id_suffix`
+
+	skipSuffix := binary.BigEndian.Uint32(skipRsv.Suffix[:])
+	rows, err := x.db.QueryContext(ctx, query, skipRsv.ASID, skipSuffix)
+	if err != nil {
+		return nil, serrors.WrapStr("Cannot query DB for max blocked BW", err)
+	}
+	defer rows.Close()
+
+	maxBWClsListPerSource := make(map[addr.AS][]reservation.BWCls)
+	for rows.Next() {
+		var ASID uint64
+		var allocBW uint32
+		err := rows.Scan(&ASID, &allocBW)
+		if err != nil {
+			return nil, serrors.WrapStr("cannot get max blocked BW from DB", err)
+		}
+		maxBWClsListPerSource[addr.AS(ASID)] = append(maxBWClsListPerSource[addr.AS(ASID)],
+			reservation.BWCls(allocBW))
+	}
+
+	maxBWPerSource := make(map[addr.AS]uint64)
+	for ASID, bwclsList := range maxBWClsListPerSource {
+		var sum uint64
+		for _, bwcls := range bwclsList {
+			sum += bwcls.ToKbps()
+		}
+		maxBWPerSource[ASID] = sum
+	}
+
+	return maxBWPerSource, nil
+}
+
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
 	const query = `SELECT COUNT(*) FROM seg_reservation`
 	var count int

@@ -84,6 +84,10 @@ type OptimizedStore interface {
 	// to be computed at the caller of this function.
 	GetDemandsPerSource(ctx context.Context, ingress, egress uint16) (
 		map[addr.AS][]*segment.Reservation, error)
+
+	// GetMaxBlockedBWPerSource returns the blocked BW per source AS ID.
+	GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reservation.SegmentID) (
+		map[addr.AS]uint64, error)
 }
 type ColibriStorage interface {
 	ReserverOnly

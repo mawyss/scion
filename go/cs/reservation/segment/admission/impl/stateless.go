@@ -149,32 +149,16 @@ func (a *StatelessAdmission) linkRatio(ctx context.Context, x backend.ColibriSto
 		}
 		egScalFctrs[src] = egScalFctr
 	}
-	rsvs, err := x.GetAllSegmentRsvs(ctx)
+
+	maxBWPerSrc, err := x.GetMaxBlockedBWPerSource(ctx, req.ID)
 	if err != nil {
-		return 0, serrors.WrapStr("cannot list all reservations", err)
+		return 0, serrors.WrapStr("cannot get max BW per source", err)
 	}
-	srcAllocPerSrc := make(map[addr.AS]uint64)
-	for _, rsv := range rsvs {
-		if rsv.ID == req.ID {
-			continue
-		}
-		src := rsv.ID.ASID
-		srcAlloc := rsv.MaxBlockedBW()
-		srcAllocPerSrc[src] += srcAlloc
+	denom := float64(prevBW) * egScalFctrs[req.ID.ASID]
+	for asid, maxBW := range maxBWPerSrc {
+		denom += float64(maxBW) * egScalFctrs[asid]
 	}
-	if _, found := srcAllocPerSrc[req.ID.ASID]; !found {
-		// add the source of the request, if not already present
-		srcAllocPerSrc[req.ID.ASID] = 0 // the value of the srcAlloc itself won't be used
-	}
-	// TODO(juagargi) after debugging, integrate this loop into the previous one:
-	var denom float64
-	for src, srcAlloc := range srcAllocPerSrc {
-		if src == req.ID.ASID {
-			srcAlloc += prevBW
-		}
-		egScalFctr := egScalFctrs[src] // if not in egScalFctrs, it must be zero
-		denom += float64(srcAlloc) * egScalFctr
-	}
+
 	return numerator / denom, nil
 }
 
@@ -227,13 +211,9 @@ func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.C
 	dem := min3BW(capIn, capEg, req.MaxBW.ToKbps())
 	if req.Ingress == ingress {
 		bucket.in += dem
-	}
-	if req.Egress == req.Egress { // XXX(juagargi) TODO(juagargi)  Whaaaaa???
-		bucket.eg += dem
-	}
-	if req.Ingress == ingress && req.Egress == req.Egress {
 		bucket.src += dem
 	}
+	bucket.eg += dem
 	demsPerSrc[req.ID.ASID] = bucket
 
 	return demsPerSrc, nil
