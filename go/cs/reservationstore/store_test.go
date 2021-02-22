@@ -26,19 +26,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	base "github.com/scionproto/scion/go/cs/reservation"
-	"github.com/scionproto/scion/go/cs/reservation/e2e"
-	"github.com/scionproto/scion/go/cs/reservation/segment"
-	"github.com/scionproto/scion/go/cs/reservation/segment/admission"
-	stateless "github.com/scionproto/scion/go/cs/reservation/segment/admission/impl"
 	"github.com/scionproto/scion/go/cs/reservation/sqlite"
-	"github.com/scionproto/scion/go/cs/reservation/test"
 	"github.com/scionproto/scion/go/cs/reservationstorage"
 	"github.com/scionproto/scion/go/cs/reservationstorage/backend"
 	"github.com/scionproto/scion/go/cs/reservationstore"
 	"github.com/scionproto/scion/go/lib/addr"
-	"github.com/scionproto/scion/go/lib/colibri/reservation"
-	"github.com/scionproto/scion/go/lib/util"
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
@@ -50,12 +42,15 @@ func TestStore(t *testing.T) {
 }
 
 func TestDebugAdmitSegmentReservation(t *testing.T) {
+	// run for 1 distinct source AS:
 	timeAdmitSegmentReservationManyRsvsSameAS(t, 1)
-	// timeAdmitSegmentReservationManySourceASes(t, 100)
+	// and with a different balance, for 100 distinct source ASes:
+	timeAdmitSegmentReservationManySourceASes(t, 10)
 }
 
 func TestDebugAdmitE2EReservation(t *testing.T) {
 	timeAdmitE2EReservationManyEndhosts(t, 1)
+	timeAdmitE2EReservationManySegments(t, 1)
 }
 
 type performanceTestCase struct {
@@ -74,6 +69,9 @@ type performanceTestCase struct {
 	DebugSkipExec      bool
 }
 
+// TestPerformanceCOLIBRI runs a performance test, writing the time values in CSV files.
+// The test is time consuming, and it is only performed if the environment variable
+// COLIBRI_PERF_TESTS is defined.
 func TestPerformanceCOLIBRI(t *testing.T) {
 
 	if os.Getenv("COLIBRI_PERF_TESTS") == "" {
@@ -81,17 +79,6 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 	}
 
 	testCases := []performanceTestCase{
-		// {
-		// 	TestName:           "doNothing",
-		// 	Xmin:               1,
-		// 	Xmax:               50,
-		// 	Xstride:            1,
-		// 	Xlabel:             "X",
-		// 	Repetitions:        REPS,
-		// 	Function:           timeDoNothing,
-		// 	Filter:             identity,
-		// 	DebugPrintProgress: true,
-		// },
 		{
 			TestName:           "segmentAdmitManyRsvsSameAS",
 			Xmin:               1,
@@ -183,52 +170,51 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		///////////////////////
 		//   E2E
 		///////////////////////
-		// {
-		// 	TestName:    "e2eAdmit_1",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# endhosts",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		existingSegments := 1
-		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-		// {
-		// 	TestName:    "e2eAdmit_5000",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# endhosts",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		existingSegments := 5000
-		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-		// {
-		// 	TestName:    "e2eAdmit_10000",
-		// 	Xmin:        0,
-		// 	Xmax:        10000,
-		// 	Xstride:     2000,
-		// 	Xlabel:      "# endhosts",
-		// 	YLabels:     []string{"ave. µsecs"},
-		// 	Repetitions: REPS,
-		// 	Function: func(t *testing.T, count int) time.Duration {
-		// 		existingSegments := 10000
-		// 		return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
-		// 	},
-		// 	Filter:             getAverage,
-		// 	DebugPrintProgress: true,
-		// },
-
+		{
+			TestName:    "e2eAdmit_1",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# endhosts",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				existingSegments := 1
+				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
+		{
+			TestName:    "e2eAdmit_5000",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# endhosts",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				existingSegments := 5000
+				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
+		{
+			TestName:    "e2eAdmit_10000",
+			Xmin:        0,
+			Xmax:        10000,
+			Xstride:     2000,
+			Xlabel:      "# endhosts",
+			YLabels:     []string{"ave. µsecs"},
+			Repetitions: REPS,
+			Function: func(t *testing.T, count int) time.Duration {
+				existingSegments := 10000
+				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
+			},
+			Filter:             getAverage,
+			DebugPrintProgress: true,
+		},
 	}
 	for _, tc := range testCases {
 		if tc.DebugSkipExec {
@@ -287,34 +273,6 @@ func mapWithFunction(t *testing.T,
 	return values
 }
 
-// // multithreaded approach
-// func mapWithFunction(t *testing.T,
-// 	fn func(*testing.T, int) []time.Duration,
-// 	xValues []int,
-// 	printProgress bool) [][]time.Duration {
-
-// 	values := make([][]time.Duration, len(xValues))
-// 	outputs := make(chan []time.Duration, len(xValues))
-// 	for i, x := range xValues {
-// 		i, x := i, x
-// 		go func(t *testing.T, output chan<- []time.Duration) {
-// 			t.Logf("x=%v", x)
-// 			row := fn(t, x)
-// 			t.Logf("done with x = %v", x)
-// 			values[i] = row
-// 			output <- row
-// 		}(t, outputs)
-// 		// if printProgress {
-// 		// 	t.Logf("[%v] done X = %v\n", time.Now().Format(time.StampMilli), x)
-// 		// }
-
-// 	}
-// 	for _ = range xValues {
-// 		<-outputs
-// 	}
-// 	return values
-// }
-
 // returns a function applicable to map
 func repeatWithFilter(t *testing.T,
 	sampler func(*testing.T, int) time.Duration,
@@ -331,39 +289,6 @@ func repeatWithFilter(t *testing.T,
 	}
 	return ret
 }
-
-// // multithreaded approach
-// // returns a function applicable to map
-// func repeatWithFilter(t *testing.T,
-// 	sampler func(*testing.T, int) time.Duration,
-// 	repeatCount int,
-// 	filter func(*testing.T, []time.Duration) []time.Duration) func(*testing.T, int) []time.Duration {
-
-// 	ret := func(t *testing.T, x int) []time.Duration {
-// 		samples := make([]time.Duration, repeatCount)
-// 		type result struct {
-// 			iteration int
-// 			result    time.Duration
-// 		}
-// 		outputs := make(chan result, repeatCount)
-// 		for i := 0; i < repeatCount; i++ {
-// 			i := i
-// 			go func(t *testing.T, output chan<- result) {
-// 				y := sampler(t, x)
-// 				output <- result{
-// 					iteration: i,
-// 					result:    y,
-// 				}
-// 			}(t, outputs)
-// 		}
-// 		for i := 0; i < repeatCount; i++ {
-// 			r := <-outputs
-// 			samples[r.iteration] = r.result
-// 		}
-// 		return filter(t, samples)
-// 	}
-// 	return ret
-// }
 
 func identity(t *testing.T, values []time.Duration) []time.Duration {
 	return values
@@ -435,6 +360,9 @@ func toCSV(t *testing.T, filename string, columnTitles []string, xValues []int, 
 	w.Flush()
 }
 
+///////////////////////////////////////////////////////////
+////////////////////////// benchmarks
+
 func BenchmarkAdmitSegmentReservation10(b *testing.B) {
 	benchmarkAdmitSegmentReservation(b, 10)
 }
@@ -473,7 +401,6 @@ func benchmarkAdmitSegmentReservation(b *testing.B, count int) {
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
 		req := newTestSegmentRequest(b, "ff00:1:111", 1, 2, 5, 7)
-		// req.AllocTrail = newAllocationBeads(1, 2)
 		trace.WithRegion(ctx, "AdmitSegmentReservation", func() {
 			_, err := s.AdmitSegmentReservation(ctx, req)
 			require.NoError(b, err, "iteration n = %d", n)
@@ -495,7 +422,6 @@ func timeAdmitSegmentReservationManySourceASes(t *testing.T, count int) time.Dur
 func timeAdmitSegmentReservationTwoDimensions(t *testing.T,
 	sameSourceASIDCount, diverseASIDsCount int) time.Duration {
 
-	// t.Logf("fixed source = %d\tdiverse source = %d", sameSourceASIDCount, diverseASIDsCount)
 	db := newDB(t)
 	defer db.Close()
 
@@ -547,23 +473,6 @@ func timeAdmitE2EReservationManySegments(t *testing.T, count int) time.Duration 
 	return timeAdmitE2EReservationTwoDimensions(t, count, 10)
 }
 
-func timeDoNothing(t *testing.T, count int) time.Duration {
-	tt := 10 * time.Millisecond
-	time.Sleep(tt)
-
-	db := newDB(t)
-	db.SetMaxOpenConns(50)
-	defer db.Close()
-
-	cap := newCapacities()
-	admitter := newAdmitter(cap)
-	s := reservationstore.NewStore(db, admitter)
-	_ = s
-
-	AddE2EReservation(t, db, "ff00:1:1", 50)
-	return tt
-}
-
 func timeAdmitE2EReservationTwoDimensions(t *testing.T, countSegments, countE2E int) time.Duration {
 	db := newDB(t)
 	defer db.Close()
@@ -600,100 +509,5 @@ func insertRsvInDB(t testing.TB, db backend.DB, ASID string, countSegment, count
 		c, err := backend.DebugCountE2ERsvs(ctx)
 		require.NoError(t, err)
 		require.Equal(t, c, countE2E)
-	}
-}
-
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////
-
-func newDB(t testing.TB) backend.DB {
-	t.Helper()
-	db, err := sqlite.New("file::memory:")
-	require.NoError(t, err)
-	// db.SetMaxOpenConns(10)
-	return db
-}
-
-func newCapacities() base.Capacities {
-	return &testCapacities{
-		Cap:    1024 * 1024, // 1GBps
-		Ifaces: []uint16{1, 2},
-	}
-}
-
-func newAdmitter(cap base.Capacities) admission.Admitter {
-	admitter := &stateless.StatelessAdmission{
-		Capacities: cap,
-		Delta:      1,
-	}
-	return admitter
-}
-
-type testCapacities struct {
-	Cap    uint64
-	Ifaces []uint16
-}
-
-var _ base.Capacities = (*testCapacities)(nil)
-
-func (c *testCapacities) IngressInterfaces() []uint16           { return c.Ifaces }
-func (c *testCapacities) EgressInterfaces() []uint16            { return c.Ifaces }
-func (c *testCapacities) Capacity(from, to uint16) uint64       { return c.Cap }
-func (c *testCapacities) CapacityIngress(ingress uint16) uint64 { return c.Cap }
-func (c *testCapacities) CapacityEgress(egress uint16) uint64   { return c.Cap }
-
-// newTestRequest creates a request ID ff00:1:1 beefcafe
-func newTestSegmentRequest(t testing.TB, ASID string, ingress, egress uint16,
-	minBW, maxBW reservation.BWCls) *segment.SetupReq {
-
-	t.Helper()
-
-	// ID := segmentIDFromRaw(t, "ff00:1:1", "beefcafe")
-	ID := segmentIDFromRaw(t, ASID, "beefcafe")
-	path := test.NewTestPath()
-	meta, err := base.NewRequestMetadata(path)
-	require.NoError(t, err)
-	return &segment.SetupReq{
-		Request: segment.Request{
-			RequestMetadata: *meta,
-			ID:              *ID,
-			Timestamp:       util.SecsToTime(1),
-			Ingress:         ingress,
-			Egress:          egress,
-		},
-		MinBW:     minBW,
-		MaxBW:     maxBW,
-		SplitCls:  2,
-		PathProps: reservation.StartLocal | reservation.EndLocal,
-	}
-}
-
-func newTestE2ESetupRequest(t testing.TB, ASID string) *e2e.SetupReq {
-	t.Helper()
-
-	ID := e2eIDFromRaw(t, ASID, "beefcafebeefcafebeef")
-	path := test.NewTestPath()
-	baseReq, err := e2e.NewRequest(util.SecsToTime(1), ID, 1, path)
-	require.NoError(t, err)
-	segmentRsvs := []reservation.SegmentID{
-		*segmentIDFromRaw(t, ASID, "00000001"),
-		*segmentIDFromRaw(t, "ff00:2:2", "beefcafe"),
-		*segmentIDFromRaw(t, "ff00:3:3", "beefcafe"),
-	}
-	ASCountPerSegment := []uint8{4, 4, 5}
-	trail := []reservation.BWCls{5, 5}
-	setup, err := e2e.NewSetupRequest(baseReq, segmentRsvs, ASCountPerSegment, 5, trail)
-	require.NoError(t, err)
-	return setup
-}
-
-func newTestE2ESuccessReq(t testing.TB, ASID string) *e2e.SetupReqSuccess {
-	token, err := reservation.TokenFromRaw(
-		xtest.MustParseHexString("16ebdb4f0d042500003f001002bad1ce003f001002facade"))
-	require.NoError(t, err)
-	return &e2e.SetupReqSuccess{
-		SetupReq: *newTestE2ESetupRequest(t, ASID),
-		Token:    *token,
 	}
 }
