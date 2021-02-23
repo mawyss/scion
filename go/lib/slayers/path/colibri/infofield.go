@@ -59,13 +59,13 @@ func (inf *InfoField) DecodeFromBytes(b []byte) error {
 	inf.R = (flags & (uint8(1) << 6)) != 0
 	inf.S = (flags & (uint8(1) << 5)) != 0
 	inf.Ver = uint8(b[1]) & 0x0f
-	inf.CurrHF = uint8(binary.BigEndian.Uint16(b[1:3]))
-	inf.HFCount = uint8(binary.BigEndian.Uint16(b[2:4]))
+	inf.CurrHF = uint8(b[2])
+	inf.HFCount = uint8(b[3])
 	inf.ResIdSuffix = make([]byte, 12)
 	copy(inf.ResIdSuffix, b[4:16])
 	inf.ExpTick = binary.BigEndian.Uint32(b[16:20])
-	inf.BwCls = uint8(binary.BigEndian.Uint16(b[19:21]))
-	inf.Rlc = uint8(binary.BigEndian.Uint16(b[20:22]))
+	inf.BwCls = uint8(b[20])
+	inf.Rlc = uint8(b[21])
 	inf.OrigPayLen = binary.BigEndian.Uint16(b[22:24])
 	return nil
 }
