@@ -34,7 +34,7 @@ import (
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
-const REPS = 2
+const REPS = 5
 
 func TestStore(t *testing.T) {
 	var s reservationstorage.Store = &reservationstore.Store{}
@@ -55,9 +55,7 @@ func TestDebugAdmitE2EReservation(t *testing.T) {
 
 type performanceTestCase struct {
 	TestName string
-	Xmin     int
-	Xmax     int
-	Xstride  int
+	X        []int
 	Xlabel   string
 	YLabels  []string // leave empty to generate default "sample 1", "sample 2", ...
 
@@ -81,9 +79,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 	testCases := []performanceTestCase{
 		{
 			TestName:           "segmentAdmitManyRsvsSameAS",
-			Xmin:               1,
-			Xmax:               1000,
-			Xstride:            10,
+			X:                  delta(1, 1000, 10),
 			Xlabel:             "# ASes",
 			Repetitions:        REPS,
 			Function:           timeAdmitSegmentReservationManyRsvsSameAS,
@@ -96,9 +92,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		//////////////
 		{
 			TestName:    "segmentAdmission_0_percent",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           delta(0, 10000, 2000),
 			Xlabel:      "# Other ASes",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -114,9 +108,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		},
 		{
 			TestName:    "segmentAdmission_10_percent",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           delta(0, 10000, 2000),
 			Xlabel:      "# Other ASes",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -132,9 +124,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		},
 		{
 			TestName:    "segmentAdmission_50_percent",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           delta(0, 10000, 2000),
 			Xlabel:      "# Other ASes",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -150,9 +140,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		},
 		{
 			TestName:    "segmentAdmission_90_percent",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           delta(0, 10000, 2000),
 			Xlabel:      "# Other ASes",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -172,9 +160,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		///////////////////////
 		{
 			TestName:    "e2eAdmit_1",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           []int{0, 10, 100, 1000, 10000, 100000},
 			Xlabel:      "# endhosts",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -187,9 +173,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		},
 		{
 			TestName:    "e2eAdmit_5000",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           []int{0, 10, 100, 1000, 10000, 100000},
 			Xlabel:      "# endhosts",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -202,9 +186,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		},
 		{
 			TestName:    "e2eAdmit_10000",
-			Xmin:        0,
-			Xmax:        10000,
-			Xstride:     2000,
+			X:           []int{0, 10, 100, 1000, 10000, 100000},
 			Xlabel:      "# endhosts",
 			YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
@@ -229,9 +211,8 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 }
 
 func doPerformanceTest(t *testing.T, tc performanceTestCase) {
-	Xs := delta(tc.Xmin, tc.Xmax, tc.Xstride)
 	values := mapWithFunction(t,
-		repeatWithFilter(t, tc.Function, tc.Repetitions, tc.Filter), Xs, tc.DebugPrintProgress)
+		repeatWithFilter(t, tc.Function, tc.Repetitions, tc.Filter), tc.X, tc.DebugPrintProgress)
 	var columnTitles []string
 	if len(tc.YLabels) > 0 {
 		columnTitles = append([]string{tc.Xlabel}, tc.YLabels...)
@@ -242,7 +223,7 @@ func doPerformanceTest(t *testing.T, tc performanceTestCase) {
 			columnTitles[i+1] = fmt.Sprintf("sample %d", i)
 		}
 	}
-	toCSV(t, fmt.Sprintf("%s.csv", tc.TestName), columnTitles, Xs, values)
+	toCSV(t, fmt.Sprintf("%s.csv", tc.TestName), columnTitles, tc.X, values)
 }
 
 /////////////////////////////////////////
