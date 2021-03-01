@@ -484,8 +484,8 @@ func newTestDB(t *testing.T) (backend.DB, func()) {
 	return db, mctlr.Finish
 }
 
-func newTestAdmitter(t *testing.T) *StatelessAdmission {
-	return &StatelessAdmission{
+func newTestAdmitter(t *testing.T) *StatefulAdmission {
+	return &StatefulAdmission{
 		Capacities: &testCapacities{
 			Cap:    1024, // 1MBps
 			Ifaces: []uint16{1, 2},

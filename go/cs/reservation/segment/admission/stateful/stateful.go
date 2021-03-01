@@ -27,17 +27,17 @@ import (
 	"github.com/scionproto/scion/go/lib/serrors"
 )
 
-// StatelessAdmission can admit a segment reservation without any state other than the DB.
-type StatelessAdmission struct {
+// StatefulAdmission can admit a segment reservation without any state other than the DB.
+type StatefulAdmission struct {
 	Capacities base.Capacities // aka capacity matrix
 	Delta      float64         // fraction of free BW that can be reserved in one request
 }
 
-var _ admission.Admitter = (*StatelessAdmission)(nil)
+var _ admission.Admitter = (*StatefulAdmission)(nil)
 
 // AdmitRsv admits a segment reservation. The request will be modified with the allowed and
 // maximum bandwidths if they were computed. It can also return an error that must be checked.
-func (a *StatelessAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) error {
 
 	avail, err := a.availableBW(ctx, x, req)
@@ -61,7 +61,7 @@ func (a *StatelessAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStor
 	return nil
 }
 
-func (a *StatelessAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) (uint64, error) {
 
 	sameIngress, err := x.GetSegmentRsvsFromIFPair(ctx, &req.Ingress, nil)
@@ -83,7 +83,7 @@ func (a *StatelessAdmission) availableBW(ctx context.Context, x backend.ColibriS
 	return uint64(free * a.Delta), nil
 }
 
-func (a *StatelessAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) (uint64, error) {
 
 	demsPerSrcRegIngress, err := a.computeTempDemands(ctx, x, req.Ingress, req)
@@ -102,7 +102,7 @@ func (a *StatelessAdmission) idealBW(ctx context.Context, x backend.ColibriStora
 	return uint64(cap * tubeRatio * linkRatio), nil
 }
 
-func (a *StatelessAdmission) tubeRatio(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
 
 	// TODO(juagargi) to avoid calling several times to computeTempDemands, refactor the
@@ -129,7 +129,7 @@ func (a *StatelessAdmission) tubeRatio(ctx context.Context, x backend.ColibriSto
 	return float64(numerator) / float64(sum), nil
 }
 
-func (a *StatelessAdmission) linkRatio(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
 
 	capEg := a.Capacities.CapacityEgress(req.Egress)
@@ -175,7 +175,7 @@ type demPerSource map[addr.AS]demands
 // this is, all cap. requested demands from all reservations, grouped by source, that enter
 // the AS at "ingress" and exit at "egress". It also stores all the source demands that enter
 // the AS at "ingress", and the source demands that exit the AS at "egress".
-func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
+func (a *StatefulAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
 	ingress uint16, req *segment.SetupReq) (demPerSource, error) {
 
 	capIn := a.Capacities.CapacityIngress(ingress)
@@ -222,7 +222,7 @@ func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.C
 // transitDemand computes the transit demand from ingress to req.Egress. The parameter
 // demsPerSrc must hold the inDem, egDem and srcDem of all reservations, grouped by source, and
 // for an ingress interface = ingress parameter.
-func (a *StatelessAdmission) transitDemand(ctx context.Context, req *segment.SetupReq,
+func (a *StatefulAdmission) transitDemand(ctx context.Context, req *segment.SetupReq,
 	ingress uint16, demsPerSrc demPerSource) (uint64, error) {
 
 	capIn := a.Capacities.CapacityIngress(ingress)
