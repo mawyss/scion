@@ -12,7 +12,7 @@ go_test(
         "//go/cs/reservation/e2e:go_default_library",
         "//go/cs/reservation/segment:go_default_library",
         "//go/cs/reservation/segment/admission:go_default_library",
-        "//go/cs/reservation/segment/admission/impl:go_default_library",
+        "//go/cs/reservation/segment/admission/stateless:go_default_library",
         "//go/cs/reservation/segmenttest:go_default_library",
         "//go/cs/reservation/sqlite:go_default_library",
         "//go/cs/reservation/test:go_default_library",

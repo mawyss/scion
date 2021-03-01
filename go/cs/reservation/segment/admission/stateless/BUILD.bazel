@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = ["stateless.go"],
-    importpath = "github.com/scionproto/scion/go/cs/reservation/segment/admission/impl",
+    importpath = "github.com/scionproto/scion/go/cs/reservation/segment/admission/stateless",
     visibility = ["//visibility:public"],
     deps = [
         "//go/cs/reservation:go_default_library",

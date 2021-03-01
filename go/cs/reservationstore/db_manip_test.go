@@ -25,7 +25,7 @@ import (
 	"github.com/scionproto/scion/go/cs/reservation/e2e"
 	"github.com/scionproto/scion/go/cs/reservation/segment"
 	"github.com/scionproto/scion/go/cs/reservation/segment/admission"
-	stateless "github.com/scionproto/scion/go/cs/reservation/segment/admission/impl"
+	"github.com/scionproto/scion/go/cs/reservation/segment/admission/stateless"
 	"github.com/scionproto/scion/go/cs/reservation/segmenttest"
 	"github.com/scionproto/scion/go/cs/reservation/sqlite"
 	"github.com/scionproto/scion/go/cs/reservation/test"
