@@ -2,8 +2,8 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["stateless.go"],
-    importpath = "github.com/scionproto/scion/go/cs/reservation/segment/admission/stateless",
+    srcs = ["stateful.go"],
+    importpath = "github.com/scionproto/scion/go/cs/reservation/segment/admission/stateful",
     visibility = ["//visibility:public"],
     deps = [
         "//go/cs/reservation:go_default_library",
@@ -18,7 +18,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["stateless_test.go"],
+    srcs = ["stateful_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/cs/reservation:go_default_library",
