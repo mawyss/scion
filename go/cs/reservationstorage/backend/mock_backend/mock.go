@@ -158,6 +158,36 @@ func (mr *MockDBMockRecorder) GetE2ERsvsOnSegRsv(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetE2ERsvsOnSegRsv", reflect.TypeOf((*MockDB)(nil).GetE2ERsvsOnSegRsv), arg0, arg1)
 }
 
+// GetInterfaceUsageEgress mocks base method
+func (m *MockDB) GetInterfaceUsageEgress(arg0 context.Context, arg1 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceUsageEgress", arg0, arg1)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaceUsageEgress indicates an expected call of GetInterfaceUsageEgress
+func (mr *MockDBMockRecorder) GetInterfaceUsageEgress(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageEgress", reflect.TypeOf((*MockDB)(nil).GetInterfaceUsageEgress), arg0, arg1)
+}
+
+// GetInterfaceUsageIngress mocks base method
+func (m *MockDB) GetInterfaceUsageIngress(arg0 context.Context, arg1 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceUsageIngress", arg0, arg1)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaceUsageIngress indicates an expected call of GetInterfaceUsageIngress
+func (mr *MockDBMockRecorder) GetInterfaceUsageIngress(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageIngress", reflect.TypeOf((*MockDB)(nil).GetInterfaceUsageIngress), arg0, arg1)
+}
+
 // GetMaxBlockedBWPerSource mocks base method
 func (m *MockDB) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 reservation.SegmentID) (map[addr.AS]uint64, error) {
 	m.ctrl.T.Helper()
@@ -423,6 +453,36 @@ func (m *MockTransaction) GetE2ERsvsOnSegRsv(arg0 context.Context, arg1 *reserva
 func (mr *MockTransactionMockRecorder) GetE2ERsvsOnSegRsv(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetE2ERsvsOnSegRsv", reflect.TypeOf((*MockTransaction)(nil).GetE2ERsvsOnSegRsv), arg0, arg1)
+}
+
+// GetInterfaceUsageEgress mocks base method
+func (m *MockTransaction) GetInterfaceUsageEgress(arg0 context.Context, arg1 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceUsageEgress", arg0, arg1)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaceUsageEgress indicates an expected call of GetInterfaceUsageEgress
+func (mr *MockTransactionMockRecorder) GetInterfaceUsageEgress(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageEgress", reflect.TypeOf((*MockTransaction)(nil).GetInterfaceUsageEgress), arg0, arg1)
+}
+
+// GetInterfaceUsageIngress mocks base method
+func (m *MockTransaction) GetInterfaceUsageIngress(arg0 context.Context, arg1 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceUsageIngress", arg0, arg1)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaceUsageIngress indicates an expected call of GetInterfaceUsageIngress
+func (mr *MockTransactionMockRecorder) GetInterfaceUsageIngress(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageIngress", reflect.TypeOf((*MockTransaction)(nil).GetInterfaceUsageIngress), arg0, arg1)
 }
 
 // GetMaxBlockedBWPerSource mocks base method
