@@ -88,7 +88,14 @@ type OptimizedStore interface {
 	// GetMaxBlockedBWPerSource returns the blocked BW per source AS ID.
 	GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reservation.SegmentID) (
 		map[addr.AS]uint64, error)
+
+	// GetInterfaceUsageIngress returns the bandwidth already blocked in ingress interface `ifid`.
+	GetInterfaceUsageIngress(ctx context.Context, ifid uint16) (uint64, error)
+
+	// GetInterfaceUsageEgress returns the bandwidth already blocked in egress interface `ifid`.
+	GetInterfaceUsageEgress(ctx context.Context, ifid uint16) (uint64, error)
 }
+
 type ColibriStorage interface {
 	ReserverOnly
 	TransitOnly

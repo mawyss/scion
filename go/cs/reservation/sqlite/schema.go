@@ -70,6 +70,22 @@ const (
 		FOREIGN KEY(seg) REFERENCES seg_reservation(ROWID) ON DELETE CASCADE,
 		FOREIGN KEY(e2e) REFERENCES e2e_reservation(ROWID) ON DELETE CASCADE
 	);
+
+	-- Tables that start with state_ are meant to enhance performance.
+	-- They must be updated every time an index / reservation is added / deleted / modified.
+
+	-- state_ingress_interface keeps the blocked bandwidth per interface ID in this AS
+	CREATE TABLE state_ingress_interface (
+		ifid	INTEGER NOT NULL,
+		blocked_bw	INTEGER NOT NULL,
+		PRIMARY KEY(ifid)
+	);
+	CREATE TABLE state_egress_interface (
+		ifid	INTEGER NOT NULL,
+		blocked_bw	INTEGER NOT NULL,
+		PRIMARY KEY(ifid)
+	);
+
 	CREATE INDEX "index_seg_reservation" ON "seg_reservation" (
 		"id_as",
 		"id_suffix"

@@ -53,6 +53,7 @@ func TestDB(t *testing.T, db TestableDB) {
 		"get e2e reservation from ID":            testGetE2ERsvFromID,
 		"get e2e reservations from segment ones": testGetE2ERsvsOnSegRsv,
 		"get demands grouped by source":          testGetDemandsPerSource,
+		"state interface blocked":                testGetInterfaceUsage,
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -675,6 +676,51 @@ func testGetDemandsPerSource(ctx context.Context, t *testing.T, db backend.DB) {
 	require.ElementsMatch(t, rsvs[r1.ID.ASID], []*segment.Reservation{r1, r3})
 }
 
+func testGetInterfaceUsage(ctx context.Context, t *testing.T, db backend.DB) {
+	// empty
+	testInterfaceUseIngress(ctx, t, db, 0, 0)
+	testInterfaceUseEgress(ctx, t, db, 1, 0)
+	// add a reservation 0->1  bwcls 2:
+	rsv := newTestReservation(t)
+	ID1 := rsv.ID
+	err := db.PersistSegmentRsv(ctx, rsv)
+	require.NoError(t, err)
+	testInterfaceUseIngress(ctx, t, db, 0, toKbps(2))
+	testInterfaceUseEgress(ctx, t, db, 1, toKbps(2))
+	// add a reservation 0->2 bwcls 3:
+	rsv = newTestReservation(t)
+	rsv.ID.Suffix[0]++
+	rsv.Egress = 2
+	rsv.Indices[0].AllocBW, rsv.Indices[0].MaxBW, rsv.Indices[0].Token.InfoField.BWCls = 3, 3, 3
+	err = db.PersistSegmentRsv(ctx, rsv)
+	require.NoError(t, err)
+	testInterfaceUseIngress(ctx, t, db, 0, toKbps(2)+toKbps(3))
+	testInterfaceUseEgress(ctx, t, db, 1, toKbps(2))
+	testInterfaceUseEgress(ctx, t, db, 2, toKbps(3))
+	// add an index bwcls 9
+	_, err = rsv.NewIndexAtSource(util.SecsToTime(2), 1, 9, 9, 1, reservation.CorePath)
+	require.NoError(t, err)
+	err = db.PersistSegmentRsv(ctx, rsv)
+	require.NoError(t, err)
+	testInterfaceUseIngress(ctx, t, db, 0, toKbps(2)+toKbps(9))
+	testInterfaceUseEgress(ctx, t, db, 1, toKbps(2))
+	testInterfaceUseEgress(ctx, t, db, 2, toKbps(9))
+	// remove the first index in 0->2 bwcls 3:
+	err = rsv.RemoveIndex(0)
+	require.NoError(t, err)
+	err = db.PersistSegmentRsv(ctx, rsv)
+	require.NoError(t, err)
+	testInterfaceUseIngress(ctx, t, db, 0, toKbps(2)+toKbps(9))
+	testInterfaceUseEgress(ctx, t, db, 1, toKbps(2))
+	testInterfaceUseEgress(ctx, t, db, 2, toKbps(9))
+	// remove reservation 0->1 bwcls 2:
+	err = db.DeleteSegmentRsv(ctx, &ID1)
+	require.NoError(t, err)
+	testInterfaceUseIngress(ctx, t, db, 0, toKbps(9))
+	testInterfaceUseEgress(ctx, t, db, 1, 0)
+	testInterfaceUseEgress(ctx, t, db, 2, toKbps(9))
+}
+
 // newToken just returns a token that can be serialized. This one has two HopFields.
 func newToken() *reservation.Token {
 	t, err := reservation.TokenFromRaw(xtest.MustParseHexString(
@@ -735,4 +781,24 @@ func getAllE2ERsvsOnSegmentRsvs(ctx context.Context, t *testing.T, db backend.DB
 		}
 	}
 	return rsvs
+}
+
+func testInterfaceUseIngress(ctx context.Context, t *testing.T, db backend.DB,
+	ifid uint16, expected uint64) {
+
+	use, err := db.GetInterfaceUsageIngress(ctx, ifid)
+	require.NoError(t, err)
+	require.Equal(t, expected, use)
+}
+
+func testInterfaceUseEgress(ctx context.Context, t *testing.T, db backend.DB,
+	ifid uint16, expected uint64) {
+
+	use, err := db.GetInterfaceUsageEgress(ctx, ifid)
+	require.NoError(t, err)
+	require.Equal(t, expected, use)
+}
+
+func toKbps(bwcls reservation.BWCls) uint64 {
+	return bwcls.ToKbps()
 }

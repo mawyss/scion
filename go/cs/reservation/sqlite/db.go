@@ -281,12 +281,53 @@ func (x *executor) DeleteExpiredIndices(ctx context.Context, now time.Time) (int
 			return err
 		}
 		if len(rowIDs) > 0 {
+			cond := fmt.Sprintf("WHERE ROWID IN (?%s)", strings.Repeat(",?", len(rsvRowIDs)-1))
+			affectedSegRsvs, err := getSegReservations(ctx, tx, cond, rsvRowIDs)
+			if err != nil {
+				return err
+			}
+			previous := make(map[reservation.SegmentID]uint64, len(affectedSegRsvs))
+			for _, seg := range affectedSegRsvs {
+				previous[seg.ID] = seg.MaxBlockedBW()
+			}
 			// delete the segment indices pointed by rowIDs
 			n, err := deleteSegIndicesFromRowIDs(ctx, tx, rowIDs)
 			if err != nil {
 				return err
 			}
 			deletedIndices += n
+			// update state of interfaces (used bandwidth may have changed)
+			affectedSegRsvs, err = getSegReservations(ctx, tx, cond, rsvRowIDs)
+			if err != nil {
+				return err
+			}
+			if len(affectedSegRsvs) != len(previous) {
+				return serrors.New("error getting difference in bandwidth use while "+
+					"expiring indices", "len_curr", len(affectedSegRsvs), "len_prev", len(previous))
+			}
+			ingressIFs := make(map[uint16]int64)
+			egressIFs := make(map[uint16]int64)
+			for _, seg := range affectedSegRsvs {
+				curr := seg.MaxBlockedBW()
+				prev := previous[seg.ID]
+				if curr != prev {
+					diff := int64(prev - curr)
+					ingressIFs[seg.Ingress] += diff
+					egressIFs[seg.Egress] += diff
+				}
+			}
+			for ifid, diff := range ingressIFs {
+				err := interfaceStateUsedBWUpdate(ctx, tx, "state_ingress_interface", ifid, diff)
+				if err != nil {
+					return err
+				}
+			}
+			for ifid, diff := range egressIFs {
+				err := interfaceStateUsedBWUpdate(ctx, tx, "state_egress_interface", ifid, diff)
+				if err != nil {
+					return err
+				}
+			}
 			// delete empty reservations touched by previous removal
 			return deleteEmptySegReservations(ctx, tx, rsvRowIDs)
 		}
@@ -402,6 +443,14 @@ func (x *executor) GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reserva
 	return maxBWPerSource, nil
 }
 
+func (x *executor) GetInterfaceUsageIngress(ctx context.Context, ifid uint16) (uint64, error) {
+	return getInterfaceUsage(ctx, x.db, "state_ingress_interface", ifid)
+}
+
+func (x *executor) GetInterfaceUsageEgress(ctx context.Context, ifid uint16) (uint64, error) {
+	return getInterfaceUsage(ctx, x.db, "state_egress_interface", ifid)
+}
+
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
 	const query = `SELECT COUNT(*) FROM seg_reservation`
 	var count int
@@ -474,6 +523,10 @@ func insertNewSegReservation(ctx context.Context, x *sql.Tx, rsv *segment.Reserv
 		if err != nil {
 			return err
 		}
+
+		// update interface state
+		blocked := int64(rsv.MaxBlockedBW())
+		return interfacesStateUsedBWUpdate(ctx, x, rsv.Ingress, rsv.Egress, blocked)
 	}
 	return nil
 }
@@ -587,9 +640,34 @@ func getSegIndices(ctx context.Context, x db.Sqler, rowID int) (segment.Indices,
 }
 
 func deleteSegmentRsv(ctx context.Context, x db.Sqler, rsvID *reservation.SegmentID) error {
+	// get blocked bandwidth to update the ingress/egress interfaces tables
+	params := []interface{}{
+		rsvID.ASID,
+		binary.BigEndian.Uint32(rsvID.Suffix[:]),
+	}
+	rsvs, err := getSegReservations(ctx, x, "WHERE id_as = ? AND id_suffix = ?", params)
+	if err != nil {
+		return err
+	}
+	switch len(rsvs) {
+	case 0:
+	case 1:
+		blocked := -int64(rsvs[0].MaxBlockedBW()) // more free bandwidth
+		err := interfacesStateUsedBWUpdate(ctx, x, rsvs[0].Ingress, rsvs[0].Egress, blocked)
+		if err != nil {
+			return err
+		}
+	default:
+		return serrors.New("Got more than one reservation for one ID", "ID", rsvID.String())
+	}
+
+	// now remove the reservation
 	const query = `DELETE FROM seg_reservation WHERE id_as = ? AND id_suffix = ?`
 	suffix := binary.BigEndian.Uint32(rsvID.Suffix[:])
-	_, err := x.ExecContext(ctx, query, rsvID.ASID, suffix)
+	_, err = x.ExecContext(ctx, query, rsvID.ASID, suffix)
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -869,4 +947,37 @@ func deleteEmptyE2EReservations(ctx context.Context, x db.Sqler, rowIDs []interf
 	query := fmt.Sprintf(queryTmpl, strings.Repeat(",?", len(rowIDs)-1))
 	_, err := x.ExecContext(ctx, query, rowIDs...)
 	return err
+}
+
+func getInterfaceUsage(ctx context.Context, x db.Sqler, table string, ifid uint16) (uint64, error) {
+	query := fmt.Sprintf(`SELECT blocked_bw FROM %s WHERE ifid = ?`, table)
+	var usedBW uint64
+	err := x.QueryRowContext(ctx, query, ifid).Scan(&usedBW)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return usedBW, nil
+}
+
+func interfaceStateUsedBWUpdate(ctx context.Context, x db.Sqler,
+	table string, ifid uint16, deltaBW int64) error {
+
+	query := fmt.Sprintf(`INSERT INTO %s(ifid, blocked_bw) VALUES(?, ?)
+	ON CONFLICT(ifid) DO UPDATE
+	SET blocked_bw = blocked_bw + ?`, table)
+	_, err := x.ExecContext(ctx, query, ifid, deltaBW, deltaBW)
+	return err
+}
+
+func interfacesStateUsedBWUpdate(ctx context.Context, x db.Sqler, ingress, egress uint16,
+	deltaBW int64) error {
+
+	err := interfaceStateUsedBWUpdate(ctx, x, "state_ingress_interface", ingress, deltaBW)
+	if err != nil {
+		return err
+	}
+	return interfaceStateUsedBWUpdate(ctx, x, "state_egress_interface", egress, deltaBW)
 }
