@@ -164,7 +164,7 @@ func VerifyMAC(privateKey []byte, packetTimestamp uint64, inf *colibri.InfoField
 		if err != nil {
 			return err
 		}
-		mac, err = CalculateColibriMacPacket(auth, packetTimestamp, inf)
+		mac, err = CalculateColibriMacPacket(auth, packetTimestamp, inf, s)
 		if err != nil {
 			return err
 		}
@@ -225,7 +225,7 @@ func CalculateColibriMacSigma(privateKey []byte, inf *colibri.InfoField,
 
 // CalculateColibriMacPacket calculates the per-packet colibri MAC.
 func CalculateColibriMacPacket(auth []byte, packetTimestamp uint64,
-	inf *colibri.InfoField) ([]byte, error) {
+	inf *colibri.InfoField, s *slayers.SCION) ([]byte, error) {
 
 	// Initialize cryptographic MAC function
 	f, err := initColibriMac(auth)
@@ -233,7 +233,7 @@ func CalculateColibriMacPacket(auth []byte, packetTimestamp uint64,
 		return nil, err
 	}
 	// Prepare the input for the MAC function
-	input, err := prepareMacInputPacket(packetTimestamp, inf)
+	input, err := prepareMacInputPacket(packetTimestamp, inf, s)
 	if err != nil {
 		return nil, err
 	}
@@ -303,14 +303,27 @@ func prepareMacInputSigma(s *slayers.SCION, inf *colibri.InfoField,
 	return buffer, nil
 }
 
-func prepareMacInputPacket(packetTimestamp uint64, inf *colibri.InfoField) ([]byte, error) {
+func prepareMacInputPacket(packetTimestamp uint64, inf *colibri.InfoField,
+	s *slayers.SCION) ([]byte, error) {
+
 	if inf == nil {
 		return nil, serrors.New("invalid input")
 	}
 
 	input := make([]byte, 16)
 	binary.BigEndian.PutUint64(input[0:8], packetTimestamp)
-	binary.BigEndian.PutUint16(input[8:10], inf.OrigPayLen)
+
+	baseHdrLen := uint64(slayers.CmnHdrLen + s.AddrHdrLen())
+	hfcount := uint64(inf.HFCount)
+	colHdrLen := 32 + (hfcount * 8)
+	payloadLen := uint64(inf.OrigPayLen)
+	total64 := baseHdrLen + colHdrLen + payloadLen
+	if total64 > (1 << 16) {
+		return nil, serrors.New("total packet length bigger than 2^16")
+	}
+	total16 := uint16(total64)
+
+	binary.BigEndian.PutUint16(input[8:10], total16)
 
 	return input, nil
 }
@@ -330,7 +343,7 @@ func prepareInputData(s *slayers.SCION, inf *colibri.InfoField,
 	binary.BigEndian.PutUint32(buffer[12:16], inf.ExpTick)
 	buffer[16] = inf.BwCls
 	buffer[17] = inf.Rlc
-	buffer[18] = inf.HFCount
+	buffer[18] = 0
 
 	// Version | C | 0
 	var flags uint8

@@ -770,8 +770,8 @@ The sizes of the packet timestamp, the info field and the individual hop fields
 are fixed and the fields always exist, although the number of hop fields
 is variable.
 
-Packet Timestamp
-----------------
+Colibri Packet Timestamp
+------------------------
 ::
 
      0                   1                   2                   3
@@ -841,8 +841,8 @@ header, this allows other components (like the replay suppression
 system) to access it without having to go through any parsing
 overhead.
 
-Info Field
-----------
+Colibri Info Field
+------------------
 The only info field has the following format::
 
      0                   1                   2                   3
@@ -909,7 +909,7 @@ The reservation ID is encoded in two parts in the packet header.
 The process of reconstructing the reservation ID is simple. It depends
 on the value of ``R`` and ``S``:
 
-.. code-block::
+.. code-block:: go
 
     var ASID [6]byte
     var Suffix []byte
@@ -947,7 +947,7 @@ Hop fields appear in the forwarding order.
 
 Hop Field MAC Computation
 -------------------------
-There is a explanation about the rationale of the MAC computation on
+There is an explanation about the rationale of the MAC computation on
 :ref:`colibri-mac-computation`.
 Here we only detail how to perform the two different MAC computations.
 The two different MAC flavors are the *static MAC* and the *per-packet MAC*
@@ -964,7 +964,7 @@ The `InputData` is common for both types::
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |                      Expiration Tick                          |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-    |      BWCls    |      RLC      |     HFCount   |  Ver  |C|  0  |
+    |      BWCls    |      RLC      |        0      |  Ver  |C|  0  |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     |            Ingress            |            Egress             |
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -978,7 +978,7 @@ with the exception of *Ingress* and *Egress* that come from the *HopField*,
 and ``ASID``, which was used to derive the
 full reservation ID. Depending on the value of ``R``, is derived as:
 
-.. code-block::
+.. code-block:: go
 
     var ASID [6]byte
     if R == 0 {
@@ -1010,14 +1010,16 @@ to compute the *per-packet MAC*,
 also known as HopField Validation Field (*HVF*):
 
 .. math::
-    \text{HVF}_i = \text{MAC}_{\sigma_i}(\text{PacketTimestamp}, \text{Original Payload Length})
+    \text{HVF}_i = \text{MAC}_{\sigma_i}(\text{PacketTimestamp}, \text{Original Packet Size})
 
 With:
 
 PacketTimestamp
-    The Timestamp described on `packet timestamp`_.
-Original Payload Length
-    It is taken from the COLIBRI Info Field.
+    The Timestamp described on `Colibri Packet Timestamp`_.
+Original Packet Size
+    The total size of the packet. It is the sum of the common header, the address header, the
+    Colibri header, and the original payload size as indicated in the Info Field (Original
+    Payload Length).
 
 The per packet MACs (or *HVFs*) are used only when ``C=0``, which implies
 that the S flag is also not set (``S=0``). The computation of

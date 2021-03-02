@@ -1783,7 +1783,8 @@ func computeColibriMac(t *testing.T, c bool, key []byte, cpath *colibri.ColibriP
 		auth, err := libcolibri.CalculateColibriMacSigma(key, cpath.InfoField,
 			cpath.HopFields[hopIndex], spkt)
 		require.NoError(t, err)
-		mac, err = libcolibri.CalculateColibriMacPacket(auth, packetTimestamp, cpath.InfoField)
+		mac, err = libcolibri.CalculateColibriMacPacket(auth, packetTimestamp,
+			cpath.InfoField, spkt)
 		require.NoError(t, err)
 	}
 

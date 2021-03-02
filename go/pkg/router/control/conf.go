@@ -117,7 +117,7 @@ func DeriveHFMacKey(k []byte) []byte {
 
 // DeriveColibriKey derives the private Colibri key from the given key.
 func DeriveColibriKey(k []byte) []byte {
-	// TODO(mawyss): Check if this is really necessary, or if we can just use the 
+	// TODO(mawyss): Check if this is really necessary, or if we can just use the
 	// go/lib/scrypto/mac.go implementation, as it is doing exactly the same.
 	if len(k) == 0 {
 		panic("empty key")
