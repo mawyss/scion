@@ -80,6 +80,7 @@ func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriSt
 	freeEgress := a.Capacities.CapacityEgress(req.Egress) - bwEgress
 	// `free` excludes the BW from an existing reservation if its ID equals the request's ID
 	free := float64(minBW(freeIngress, freeEgress))
+	// TODO(juagargi) performance improvement: keep free BW state per interface ID
 	return uint64(free * a.Delta), nil
 }
 
@@ -108,7 +109,7 @@ func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStor
 	// TODO(juagargi) to avoid calling several times to computeTempDemands, refactor the
 	// type holding the results, so that it stores capReqDem per source per ingress interface.
 	// InScalFctr and EgScalFctr will be stored independently, per source per interface.
-	transitDemand, err := a.transitDemand(ctx, req, req.Ingress, demsPerSrc)
+	transitDemand, err := a.transitDemand(ctx, req.Ingress, req.Egress, demsPerSrc)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute transit demand", err)
 	}
@@ -120,7 +121,7 @@ func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStor
 		if err != nil {
 			return 0, serrors.WrapStr("cannot compute transit demand", err)
 		}
-		dem, err := a.transitDemand(ctx, req, in, demandsForThisIngress)
+		dem, err := a.transitDemand(ctx, in, req.Egress, demandsForThisIngress)
 		if err != nil {
 			return 0, serrors.WrapStr("cannot compute transit demand", err)
 		}
@@ -222,11 +223,11 @@ func (a *StatefulAdmission) computeTempDemands(ctx context.Context, x backend.Co
 // transitDemand computes the transit demand from ingress to req.Egress. The parameter
 // demsPerSrc must hold the inDem, egDem and srcDem of all reservations, grouped by source, and
 // for an ingress interface = ingress parameter.
-func (a *StatefulAdmission) transitDemand(ctx context.Context, req *segment.SetupReq,
-	ingress uint16, demsPerSrc demPerSource) (uint64, error) {
+func (a *StatefulAdmission) transitDemand(ctx context.Context, ingress, egress uint16,
+	demsPerSrc demPerSource) (uint64, error) {
 
 	capIn := a.Capacities.CapacityIngress(ingress)
-	capEg := a.Capacities.CapacityEgress(req.Egress)
+	capEg := a.Capacities.CapacityEgress(egress)
 	var transitDem uint64
 	for _, dems := range demsPerSrc {
 		var inScalFctr float64 = 1.
