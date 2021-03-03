@@ -211,8 +211,8 @@ func TestTubeRatio(t *testing.T) {
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -225,8 +225,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -240,8 +240,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5), // 128Kbps
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -255,8 +255,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -271,8 +271,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -287,8 +287,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 			},
 			globalCapacity: 10,
 			interfaces:     []uint16{1, 2, 3},
@@ -307,8 +307,8 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:4", "00000002", 5, 4, 5, 9, 9),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource([]*segment.Reservation{
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource([]*segment.Reservation{
 					rsvs[0], rsvs[1], rsvs[2]}), nil)
 			},
 			globalCapacity: 1024 * 1024,
@@ -351,8 +351,8 @@ func TestLinkRatio(t *testing.T) {
 			req:       testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5),
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:aaaa:9999", "aaaabbbb"))
 			},
@@ -364,8 +364,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -378,8 +378,8 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -392,8 +392,8 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:3", "00000001", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -405,8 +405,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 3, 5, 5, 5),
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -418,8 +418,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -431,8 +431,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
-				db.EXPECT().GetDemandsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getDemandsPerSource(rsvs), nil)
+				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
+					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
@@ -561,7 +561,7 @@ func testAddAllocTrail(req *segment.SetupReq, beads ...reservation.BWCls) *segme
 	return req
 }
 
-func getDemandsPerSource(rsvs []*segment.Reservation) map[addr.AS][]*segment.Reservation {
+func getRsvsPerSource(rsvs []*segment.Reservation) map[addr.AS][]*segment.Reservation {
 	demPerSrc := make(map[addr.AS][]*segment.Reservation)
 	for _, r := range rsvs {
 		demPerSrc[r.ID.ASID] = append(demPerSrc[r.ID.ASID], r)

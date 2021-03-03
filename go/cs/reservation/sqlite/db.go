@@ -381,7 +381,7 @@ func (x *executor) PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) erro
 	return nil
 }
 
-func (x *executor) GetDemandsPerSource(ctx context.Context,
+func (x *executor) GetRsvsPerSource(ctx context.Context,
 	ingress, egress uint16) (map[addr.AS][]*segment.Reservation, error) {
 
 	demPerSource := make(map[addr.AS][]*segment.Reservation)

@@ -52,7 +52,7 @@ func TestDB(t *testing.T, db TestableDB) {
 		"persist e2e reservation":                testPersistE2ERsv,
 		"get e2e reservation from ID":            testGetE2ERsvFromID,
 		"get e2e reservations from segment ones": testGetE2ERsvsOnSegRsv,
-		"get demands grouped by source":          testGetDemandsPerSource,
+		"get demands grouped by source":          testGetRsvsPerSource,
 		"state interface blocked":                testGetInterfaceUsage,
 	}
 	for name, test := range tests {
@@ -644,7 +644,7 @@ func testGetE2ERsvsOnSegRsv(ctx context.Context, t *testing.T, db backend.DB) {
 	require.ElementsMatch(t, rsvs, []*e2e.Reservation{e2, e3})
 }
 
-func testGetDemandsPerSource(ctx context.Context, t *testing.T, db backend.DB) {
+func testGetRsvsPerSource(ctx context.Context, t *testing.T, db backend.DB) {
 	// similar to testGetSegmentRsvsFromIFPair: three rsvs: [in1,e1] ; [in2,e1] ; [in1,e2]
 	r1 := newTestReservation(t)
 	r1.Ingress = 11
@@ -663,12 +663,12 @@ func testGetDemandsPerSource(ctx context.Context, t *testing.T, db backend.DB) {
 	require.NoError(t, err)
 
 	// query empty set
-	rsvs, err := db.GetDemandsPerSource(ctx, 10, 10)
+	rsvs, err := db.GetRsvsPerSource(ctx, 10, 10)
 	require.NoError(t, err)
 	require.Empty(t, rsvs)
 
 	// group 1 and 3
-	rsvs, err = db.GetDemandsPerSource(ctx, 11, 10)
+	rsvs, err = db.GetRsvsPerSource(ctx, 11, 10)
 	require.NoError(t, err)
 	require.Len(t, rsvs, 1)
 	require.Contains(t, rsvs, r1.ID.ASID)

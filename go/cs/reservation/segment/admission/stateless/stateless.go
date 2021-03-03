@@ -181,7 +181,7 @@ func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.C
 	capIn := a.Capacities.CapacityIngress(ingress)
 	capEg := a.Capacities.CapacityEgress(req.Egress)
 
-	rsvs, err := x.GetDemandsPerSource(ctx, ingress, req.Egress)
+	rsvs, err := x.GetRsvsPerSource(ctx, ingress, req.Egress)
 	if err != nil {
 		return nil, serrors.WrapStr("cannot obtain segment rsvs. from ingress/egress pair", err)
 	}
