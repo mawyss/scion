@@ -121,9 +121,11 @@ func TestAvailableBW(t *testing.T) {
 			delta:   1,
 			req:     req,
 			setupDB: func(db *mock_backend.MockDB) {
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), &req.Ingress, nil).Return(
-					nil, nil)
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), nil, &req.Egress).Return(
+				db.EXPECT().GetInterfaceUsageIngress(gomock.Any(), gomock.Any()).Return(
+					uint64(0), nil)
+				db.EXPECT().GetInterfaceUsageEgress(gomock.Any(), gomock.Any()).Return(
+					uint64(0), nil)
+				db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).Return(
 					nil, nil)
 			},
 		},
@@ -134,14 +136,13 @@ func TestAvailableBW(t *testing.T) {
 			delta:   1,
 			req:     req,
 			setupDB: func(db *mock_backend.MockDB) {
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), &req.Ingress, nil).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), nil, &req.Egress).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
+				rsvs := []*segment.Reservation{testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5)}
+				db.EXPECT().GetInterfaceUsageIngress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps(), nil)
+				db.EXPECT().GetInterfaceUsageEgress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps(), nil)
+				db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).Return(
+					rsvs[0], nil)
 			},
 		},
 		"other reservation in DB": {
@@ -149,16 +150,16 @@ func TestAvailableBW(t *testing.T) {
 			delta:   1,
 			req:     req,
 			setupDB: func(db *mock_backend.MockDB) {
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), &req.Ingress, nil).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-						testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), nil, &req.Egress).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-						testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
+				rsvs := []*segment.Reservation{
+					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
+					testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
+				}
+				db.EXPECT().GetInterfaceUsageIngress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps()*2, nil)
+				db.EXPECT().GetInterfaceUsageEgress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps()*2, nil)
+				db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).Return(
+					rsvs[0], nil)
 			},
 		},
 		"change delta": {
@@ -166,16 +167,16 @@ func TestAvailableBW(t *testing.T) {
 			delta:   .5,
 			req:     req,
 			setupDB: func(db *mock_backend.MockDB) {
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), &req.Ingress, nil).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-						testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
-				db.EXPECT().GetSegmentRsvsFromIFPair(gomock.Any(), nil, &req.Egress).Return(
-					[]*segment.Reservation{
-						testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
-						testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
-					}, nil)
+				rsvs := []*segment.Reservation{
+					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
+					testNewRsv(t, "ff00:1:2", "beefcafe", 1, 2, 5, 5, 5),
+				}
+				db.EXPECT().GetInterfaceUsageIngress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps()*2, nil)
+				db.EXPECT().GetInterfaceUsageEgress(gomock.Any(), gomock.Any()).Return(
+					reservation.BWCls(5).ToKbps()*2, nil)
+				db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).Return(
+					rsvs[0], nil)
 			},
 		},
 	}

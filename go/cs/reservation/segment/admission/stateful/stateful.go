@@ -64,23 +64,31 @@ func (a *StatefulAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStora
 func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) (uint64, error) {
 
-	sameIngress, err := x.GetSegmentRsvsFromIFPair(ctx, &req.Ingress, nil)
+	usedIngress, err := x.GetInterfaceUsageIngress(ctx, req.Ingress)
 	if err != nil {
-		return 0, serrors.WrapStr("cannot get reservations using ingress", err,
-			"ingress", req.Ingress)
+		return 0, serrors.WrapStr("computing available bw, used ingress failed", err)
 	}
-	sameEgress, err := x.GetSegmentRsvsFromIFPair(ctx, nil, &req.Egress)
+	usedEgress, err := x.GetInterfaceUsageEgress(ctx, req.Egress)
 	if err != nil {
-		return 0, serrors.WrapStr("cannot get reservations using egress", err,
-			"egress", req.Egress)
+		return 0, serrors.WrapStr("computing available bw, used egress failed", err)
 	}
-	bwIngress := sumMaxBlockedBW(sameIngress, req.ID)
-	freeIngress := a.Capacities.CapacityIngress(req.Ingress) - bwIngress
-	bwEgress := sumMaxBlockedBW(sameEgress, req.ID)
-	freeEgress := a.Capacities.CapacityEgress(req.Egress) - bwEgress
-	// `free` excludes the BW from an existing reservation if its ID equals the request's ID
+	excludeRsv, err := x.GetSegmentRsvFromID(ctx, &req.ID)
+	if err != nil {
+		return 0, serrors.WrapStr("computing available bw, get existing rsv failed", err)
+	}
+	if excludeRsv != nil {
+		blocked := excludeRsv.MaxBlockedBW()
+		if excludeRsv.Ingress == req.Ingress {
+			usedIngress -= blocked
+		}
+		if excludeRsv.Egress == req.Egress {
+			usedEgress -= blocked
+		}
+	}
+	freeIngress := a.Capacities.CapacityIngress(req.Ingress) - usedIngress
+	freeEgress := a.Capacities.CapacityIngress(req.Ingress) - usedEgress
 	free := float64(minBW(freeIngress, freeEgress))
-	// TODO(juagargi) performance improvement: keep free BW state per interface ID
+
 	return uint64(free * a.Delta), nil
 }
 
