@@ -34,7 +34,7 @@ import (
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
-const REPS = 5
+const REPS = 10
 
 func TestStore(t *testing.T) {
 	var s reservationstorage.Store = &reservationstore.Store{}
@@ -91,10 +91,10 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		//    Segment
 		//////////////
 		{
-			TestName:    "segmentAdmission_0_percent",
-			X:           delta(0, 10000, 2000),
-			Xlabel:      "# Other ASes",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "segmentAdmission_0_percent",
+			X:        delta(0, 10000, 2000),
+			Xlabel:   "# Other ASes",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 0.0
@@ -103,14 +103,14 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 				return timeAdmitSegmentReservationTwoDimensions(t,
 					sameSourceASID, int(differentSrcASesCount))
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 		{
-			TestName:    "segmentAdmission_10_percent",
-			X:           delta(0, 10000, 2000),
-			Xlabel:      "# Other ASes",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "segmentAdmission_10_percent",
+			X:        delta(0, 10000, 2000),
+			Xlabel:   "# Other ASes",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 10.0
@@ -119,14 +119,14 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 				return timeAdmitSegmentReservationTwoDimensions(t,
 					sameSourceASID, int(differentSrcASesCount))
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 		{
-			TestName:    "segmentAdmission_50_percent",
-			X:           delta(0, 10000, 2000),
-			Xlabel:      "# Other ASes",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "segmentAdmission_50_percent",
+			X:        delta(0, 10000, 2000),
+			Xlabel:   "# Other ASes",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 50.0
@@ -135,14 +135,14 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 				return timeAdmitSegmentReservationTwoDimensions(t,
 					sameSourceASID, int(differentSrcASesCount))
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 		{
-			TestName:    "segmentAdmission_90_percent",
-			X:           delta(0, 10000, 2000),
-			Xlabel:      "# Other ASes",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "segmentAdmission_90_percent",
+			X:        delta(0, 10000, 2000),
+			Xlabel:   "# Other ASes",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 90.0
@@ -151,7 +151,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 				return timeAdmitSegmentReservationTwoDimensions(t,
 					sameSourceASID, int(differentSrcASesCount))
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 
@@ -159,42 +159,42 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		//   E2E
 		///////////////////////
 		{
-			TestName:    "e2eAdmit_1",
-			X:           []int{0, 10, 100, 1000, 10000, 100000},
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "e2eAdmit_1",
+			X:        []int{0, 10, 100, 1000, 10000, 100000},
+			Xlabel:   "# endhosts",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				existingSegments := 1
 				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 		{
-			TestName:    "e2eAdmit_5000",
-			X:           []int{0, 10, 100, 1000, 10000, 100000},
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "e2eAdmit_5000",
+			X:        []int{0, 10, 100, 1000, 10000, 100000},
+			Xlabel:   "# endhosts",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				existingSegments := 5000
 				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 		{
-			TestName:    "e2eAdmit_10000",
-			X:           []int{0, 10, 100, 1000, 10000, 100000},
-			Xlabel:      "# endhosts",
-			YLabels:     []string{"ave. µsecs"},
+			TestName: "e2eAdmit_10000",
+			X:        []int{0, 10, 100, 1000, 10000, 100000},
+			Xlabel:   "# endhosts",
+			// YLabels:     []string{"ave. µsecs"},
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				existingSegments := 10000
 				return timeAdmitE2EReservationTwoDimensions(t, existingSegments, count)
 			},
-			Filter:             getAverage,
+			Filter:             identity,
 			DebugPrintProgress: true,
 		},
 	}
@@ -204,7 +204,7 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 		}
 		tc := tc
 		t.Run(tc.TestName, func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 			doPerformanceTest(t, tc)
 		})
 	}
