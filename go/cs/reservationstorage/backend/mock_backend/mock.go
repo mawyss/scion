@@ -143,6 +143,36 @@ func (mr *MockDBMockRecorder) GetE2ERsvsOnSegRsv(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetE2ERsvsOnSegRsv", reflect.TypeOf((*MockDB)(nil).GetE2ERsvsOnSegRsv), arg0, arg1)
 }
 
+// GetEgDemand mocks base method
+func (m *MockDB) GetEgDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEgDemand", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEgDemand indicates an expected call of GetEgDemand
+func (mr *MockDBMockRecorder) GetEgDemand(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgDemand", reflect.TypeOf((*MockDB)(nil).GetEgDemand), arg0, arg1, arg2)
+}
+
+// GetInDemand mocks base method
+func (m *MockDB) GetInDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInDemand", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInDemand indicates an expected call of GetInDemand
+func (mr *MockDBMockRecorder) GetInDemand(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInDemand", reflect.TypeOf((*MockDB)(nil).GetInDemand), arg0, arg1, arg2)
+}
+
 // GetInterfaceUsageEgress mocks base method
 func (m *MockDB) GetInterfaceUsageEgress(arg0 context.Context, arg1 uint16) (uint64, error) {
 	m.ctrl.T.Helper()
@@ -186,6 +216,21 @@ func (m *MockDB) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 reservation
 func (mr *MockDBMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockDB)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
+}
+
+// GetRsvsForSource mocks base method
+func (m *MockDB) GetRsvsForSource(arg0 context.Context, arg1 addr.AS) ([]*segment.Reservation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRsvsForSource", arg0, arg1)
+	ret0, _ := ret[0].([]*segment.Reservation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRsvsForSource indicates an expected call of GetRsvsForSource
+func (mr *MockDBMockRecorder) GetRsvsForSource(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRsvsForSource", reflect.TypeOf((*MockDB)(nil).GetRsvsForSource), arg0, arg1)
 }
 
 // GetRsvsPerSource mocks base method
@@ -263,6 +308,52 @@ func (mr *MockDBMockRecorder) GetSegmentRsvsFromSrcDstIA(arg0, arg1, arg2 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSegmentRsvsFromSrcDstIA", reflect.TypeOf((*MockDB)(nil).GetSegmentRsvsFromSrcDstIA), arg0, arg1, arg2)
 }
 
+// GetSourceState mocks base method
+func (m *MockDB) GetSourceState(arg0 context.Context, arg1 addr.AS, arg2, arg3 uint16) (uint64, uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSourceState", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(uint64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetSourceState indicates an expected call of GetSourceState
+func (mr *MockDBMockRecorder) GetSourceState(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSourceState", reflect.TypeOf((*MockDB)(nil).GetSourceState), arg0, arg1, arg2, arg3)
+}
+
+// GetTransitAlloc mocks base method
+func (m *MockDB) GetTransitAlloc(arg0 context.Context, arg1, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransitAlloc", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransitAlloc indicates an expected call of GetTransitAlloc
+func (mr *MockDBMockRecorder) GetTransitAlloc(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransitAlloc", reflect.TypeOf((*MockDB)(nil).GetTransitAlloc), arg0, arg1, arg2)
+}
+
+// GetTransitDem mocks base method
+func (m *MockDB) GetTransitDem(arg0 context.Context, arg1, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransitDem", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransitDem indicates an expected call of GetTransitDem
+func (mr *MockDBMockRecorder) GetTransitDem(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransitDem", reflect.TypeOf((*MockDB)(nil).GetTransitDem), arg0, arg1, arg2)
+}
+
 // NewSegmentRsv mocks base method
 func (m *MockDB) NewSegmentRsv(arg0 context.Context, arg1 *segment.Reservation) error {
 	m.ctrl.T.Helper()
@@ -303,6 +394,34 @@ func (m *MockDB) PersistSegmentRsv(arg0 context.Context, arg1 *segment.Reservati
 func (mr *MockDBMockRecorder) PersistSegmentRsv(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSegmentRsv", reflect.TypeOf((*MockDB)(nil).PersistSegmentRsv), arg0, arg1)
+}
+
+// PersistSourceState mocks base method
+func (m *MockDB) PersistSourceState(arg0 context.Context, arg1 addr.AS, arg2, arg3 uint16, arg4, arg5 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistSourceState", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistSourceState indicates an expected call of PersistSourceState
+func (mr *MockDBMockRecorder) PersistSourceState(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSourceState", reflect.TypeOf((*MockDB)(nil).PersistSourceState), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
+// PersistTransit mocks base method
+func (m *MockDB) PersistTransit(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistTransit", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistTransit indicates an expected call of PersistTransit
+func (mr *MockDBMockRecorder) PersistTransit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransit", reflect.TypeOf((*MockDB)(nil).PersistTransit), arg0, arg1, arg2, arg3)
 }
 
 // SetMaxIdleConns mocks base method
@@ -440,6 +559,36 @@ func (mr *MockTransactionMockRecorder) GetE2ERsvsOnSegRsv(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetE2ERsvsOnSegRsv", reflect.TypeOf((*MockTransaction)(nil).GetE2ERsvsOnSegRsv), arg0, arg1)
 }
 
+// GetEgDemand mocks base method
+func (m *MockTransaction) GetEgDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEgDemand", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEgDemand indicates an expected call of GetEgDemand
+func (mr *MockTransactionMockRecorder) GetEgDemand(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEgDemand", reflect.TypeOf((*MockTransaction)(nil).GetEgDemand), arg0, arg1, arg2)
+}
+
+// GetInDemand mocks base method
+func (m *MockTransaction) GetInDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInDemand", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInDemand indicates an expected call of GetInDemand
+func (mr *MockTransactionMockRecorder) GetInDemand(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInDemand", reflect.TypeOf((*MockTransaction)(nil).GetInDemand), arg0, arg1, arg2)
+}
+
 // GetInterfaceUsageEgress mocks base method
 func (m *MockTransaction) GetInterfaceUsageEgress(arg0 context.Context, arg1 uint16) (uint64, error) {
 	m.ctrl.T.Helper()
@@ -483,6 +632,21 @@ func (m *MockTransaction) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 re
 func (mr *MockTransactionMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockTransaction)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
+}
+
+// GetRsvsForSource mocks base method
+func (m *MockTransaction) GetRsvsForSource(arg0 context.Context, arg1 addr.AS) ([]*segment.Reservation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRsvsForSource", arg0, arg1)
+	ret0, _ := ret[0].([]*segment.Reservation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRsvsForSource indicates an expected call of GetRsvsForSource
+func (mr *MockTransactionMockRecorder) GetRsvsForSource(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRsvsForSource", reflect.TypeOf((*MockTransaction)(nil).GetRsvsForSource), arg0, arg1)
 }
 
 // GetRsvsPerSource mocks base method
@@ -560,6 +724,52 @@ func (mr *MockTransactionMockRecorder) GetSegmentRsvsFromSrcDstIA(arg0, arg1, ar
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSegmentRsvsFromSrcDstIA", reflect.TypeOf((*MockTransaction)(nil).GetSegmentRsvsFromSrcDstIA), arg0, arg1, arg2)
 }
 
+// GetSourceState mocks base method
+func (m *MockTransaction) GetSourceState(arg0 context.Context, arg1 addr.AS, arg2, arg3 uint16) (uint64, uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSourceState", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(uint64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetSourceState indicates an expected call of GetSourceState
+func (mr *MockTransactionMockRecorder) GetSourceState(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSourceState", reflect.TypeOf((*MockTransaction)(nil).GetSourceState), arg0, arg1, arg2, arg3)
+}
+
+// GetTransitAlloc mocks base method
+func (m *MockTransaction) GetTransitAlloc(arg0 context.Context, arg1, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransitAlloc", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransitAlloc indicates an expected call of GetTransitAlloc
+func (mr *MockTransactionMockRecorder) GetTransitAlloc(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransitAlloc", reflect.TypeOf((*MockTransaction)(nil).GetTransitAlloc), arg0, arg1, arg2)
+}
+
+// GetTransitDem mocks base method
+func (m *MockTransaction) GetTransitDem(arg0 context.Context, arg1, arg2 uint16) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransitDem", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTransitDem indicates an expected call of GetTransitDem
+func (mr *MockTransactionMockRecorder) GetTransitDem(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransitDem", reflect.TypeOf((*MockTransaction)(nil).GetTransitDem), arg0, arg1, arg2)
+}
+
 // NewSegmentRsv mocks base method
 func (m *MockTransaction) NewSegmentRsv(arg0 context.Context, arg1 *segment.Reservation) error {
 	m.ctrl.T.Helper()
@@ -600,6 +810,34 @@ func (m *MockTransaction) PersistSegmentRsv(arg0 context.Context, arg1 *segment.
 func (mr *MockTransactionMockRecorder) PersistSegmentRsv(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSegmentRsv", reflect.TypeOf((*MockTransaction)(nil).PersistSegmentRsv), arg0, arg1)
+}
+
+// PersistSourceState mocks base method
+func (m *MockTransaction) PersistSourceState(arg0 context.Context, arg1 addr.AS, arg2, arg3 uint16, arg4, arg5 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistSourceState", arg0, arg1, arg2, arg3, arg4, arg5)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistSourceState indicates an expected call of PersistSourceState
+func (mr *MockTransactionMockRecorder) PersistSourceState(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSourceState", reflect.TypeOf((*MockTransaction)(nil).PersistSourceState), arg0, arg1, arg2, arg3, arg4, arg5)
+}
+
+// PersistTransit mocks base method
+func (m *MockTransaction) PersistTransit(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistTransit", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistTransit indicates an expected call of PersistTransit
+func (mr *MockTransactionMockRecorder) PersistTransit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransit", reflect.TypeOf((*MockTransaction)(nil).PersistTransit), arg0, arg1, arg2, arg3)
 }
 
 // Rollback mocks base method

@@ -86,11 +86,37 @@ type OptimizedStore interface {
 	GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reservation.SegmentID) (
 		map[addr.AS]uint64, error)
 
+	// TODO(juagargi) the two ^^ previous calls are obsolete
+
 	// GetInterfaceUsageIngress returns the bandwidth already blocked in ingress interface `ifid`.
 	GetInterfaceUsageIngress(ctx context.Context, ifid uint16) (uint64, error)
 
 	// GetInterfaceUsageEgress returns the bandwidth already blocked in egress interface `ifid`.
 	GetInterfaceUsageEgress(ctx context.Context, ifid uint16) (uint64, error)
+
+	// GetTransitDem returns the stored transit demand between ingress and egress.
+	GetTransitDem(ctx context.Context, ingress, egress uint16) (uint64, error)
+
+	// PersistTransit stores the transit state between ingress and egress.
+	PersistTransit(ctx context.Context, ingress, egress uint16, transit uint64) error
+
+	// GetSourceState returns the srcDem and srcAlloc for a source,ingress,egress tuple.
+	GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (
+		uint64, uint64, error)
+
+	// PersistSourceState stores the source state.
+	PersistSourceState(ctx context.Context, source addr.AS, ingress, egress uint16,
+		srcDem, srcAlloc uint64) error
+
+	GetInDemand(ctx context.Context, source addr.AS, ingress uint16) (uint64, error)
+	GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (uint64, error)
+
+	// GetTransitAlloc returns the denominator of the linkRatio formula.
+	GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error)
+
+	// GetRsvsForSource returns all reservations for a given source.
+	// TODO(juagargi) possibly obsolete:
+	GetRsvsForSource(ctx context.Context, ASID addr.AS) ([]*segment.Reservation, error)
 }
 
 type ColibriStorage interface {

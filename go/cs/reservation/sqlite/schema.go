@@ -86,6 +86,49 @@ const (
 		PRIMARY KEY(ifid)
 	);
 
+	-- state_transit_demand keeps the current transit demand between interface pairs
+	CREATE TABLE state_transit_demand (
+		ingress INTEGER NOT NULL,
+		egress  INTEGER NOT NULL,
+		traffic_demand INTEGER NOT NULL,
+		PRIMARY KEY(ingress,egress)
+	);
+
+	-- state_source_ingress_egress stores 
+	CREATE TABLE state_source_ingress_egress (
+		source INTEGER NOT NULL,
+		ingress INTEGER NOT NULL,
+		egress INTEGER NOT NULL,
+		src_demand INTEGER NOT NULL,
+		src_alloc INTEGER NOT NULL,
+		PRIMARY KEY(source,ingress,egress)
+	);
+
+	-- stores inDemand
+	CREATE TABLE state_source_ingress (
+		source INTEGER NOT NULL,
+		ingress INTEGER NOT NULL,
+		demand INTEGER NOT NULL,
+		PRIMARY KEY(source,ingress)
+	);
+
+	-- stores egDemand
+	CREATE TABLE state_source_egress (
+		source INTEGER NOT NULL,
+		egress INTEGER NOT NULL,
+		demand INTEGER NOT NULL,
+		PRIMARY KEY(source,egress)
+	);
+
+	-- stores the sum of egScalFctr x srcAlloc for all sources, parametrized on ingress and egress.
+	-- It is essentially the denominator of the link ratio formula.
+	CREATE TABLE state_transit_alloc (
+		ingress INTEGER NOT NULL,
+		egress INTEGER NOT NULL,
+		traffic_alloc INTEGER NOT NULL,
+		PRIMARY KEY(ingress,egress)
+	);
+
 	CREATE INDEX "index_seg_reservation" ON "seg_reservation" (
 		"id_as",
 		"id_suffix"

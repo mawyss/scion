@@ -16,6 +16,7 @@ package stateful
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -211,9 +212,10 @@ func TestTubeRatio(t *testing.T) {
 			req:       newTestRequest(t, 1, 2, 5, 5),
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -225,9 +227,10 @@ func TestTubeRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -240,9 +243,10 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 3, 3), // 64Kbps
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5), // 128Kbps
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 3, 3)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -255,9 +259,11 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 9, 9), // will be ignored
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
+
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -271,9 +277,10 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3},
@@ -287,9 +294,10 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 10)
 			},
 			globalCapacity: 10,
 			interfaces:     []uint16{1, 2, 3},
@@ -300,17 +308,18 @@ func TestTubeRatio(t *testing.T) {
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
-					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5),
+					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:3", "00000001", 4, 5, 5, 9, 9),
 					testNewRsv(t, "ff00:1:3", "00000002", 4, 5, 5, 9, 9),
 					testNewRsv(t, "ff00:1:4", "00000001", 5, 4, 5, 9, 9),
 					testNewRsv(t, "ff00:1:4", "00000002", 5, 4, 5, 9, 9),
 				}
-				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
+				req := newTestRequest(t, 1, 2, 5, 5)
 				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
 					AnyTimes().Return(getRsvsPerSource([]*segment.Reservation{
 					rsvs[0], rsvs[1], rsvs[2]}), nil)
+				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
 			interfaces:     []uint16{1, 2, 3, 4, 5},
@@ -332,9 +341,7 @@ func TestTubeRatio(t *testing.T) {
 			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			demPerSrc, err := adm.computeTempDemands(ctx, db, tc.req.Ingress, tc.req)
-			require.NoError(t, err)
-			ratio, err := adm.tubeRatio(ctx, db, tc.req, demPerSrc)
+			ratio, err := adm.tubeRatio(ctx, db, tc.req)
 			require.NoError(t, err)
 			require.Equal(t, tc.tubeRatio, ratio)
 		})
@@ -352,10 +359,8 @@ func TestLinkRatio(t *testing.T) {
 			req:       testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5),
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:aaaa:9999", "aaaabbbb"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"same request": {
@@ -365,10 +370,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"same source": {
@@ -379,10 +382,8 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"different sources": {
@@ -393,23 +394,19 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:2", "00000001", 1, 2, 5, 5, 5),
 					testNewRsv(t, "ff00:1:3", "00000001", 1, 2, 5, 5, 5),
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"different egress interface": {
-			linkRatio: .5,
+			linkRatio: 1., // 64 / 64  => srcAlloc(ff00:1:1, 1, 2) = 0 + prevBW = 0 + 64 = 64
 			req:       testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5),
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 3, 5, 5, 5),
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 5, 5)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"smaller prevBW": {
@@ -419,10 +416,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 3, 3)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 		"bigger prevBW": {
@@ -432,10 +427,8 @@ func TestLinkRatio(t *testing.T) {
 				rsvs := []*segment.Reservation{
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
+				req := testAddAllocTrail(newTestRequest(t, 1, 2, 5, 5), 7, 7)
+				prepareMockForLinkRatio(db, rsvs, req, 1024*1024)
 			},
 		},
 	}
@@ -455,9 +448,7 @@ func TestLinkRatio(t *testing.T) {
 			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			demsPerSrc, err := adm.computeTempDemands(ctx, db, tc.req.Ingress, tc.req)
-			require.NoError(t, err)
-			linkRatio, err := adm.linkRatio(ctx, db, tc.req, demsPerSrc)
+			linkRatio, err := adm.linkRatio(ctx, db, tc.req)
 			require.NoError(t, err)
 			require.Equal(t, tc.linkRatio, linkRatio)
 		})
@@ -583,4 +574,159 @@ func getMaxBWPerSource(t *testing.T, rsvs []*segment.Reservation, skipASID, skip
 		}
 	}
 	return maxBWPerSrc, nil
+}
+
+type sourceIngressEgress struct {
+	Source  addr.AS
+	Ingress uint16
+	Egress  uint16
+}
+type sourceState struct {
+	SrcDem   uint64
+	SrcAlloc uint64
+}
+
+func prepareForMock(rsvs []*segment.Reservation, req *segment.SetupReq, globalCapacity uint64) (
+	sameIDAsRequest *segment.Reservation,
+	sourceStateMap map[sourceIngressEgress]sourceState,
+	inMap map[addr.AS]map[uint16]uint64,
+	egMap map[addr.AS]map[uint16]uint64,
+	transitDem map[uint16]uint64,
+	transitAlloc uint64) {
+
+	// source,ingress,egress map
+	sourceStateMap = make(map[sourceIngressEgress]sourceState)
+
+	inMap = make(map[addr.AS]map[uint16]uint64) // inDem for each source
+	egMap = make(map[addr.AS]map[uint16]uint64)
+
+	// transitDem is map[ingress] to req.Egress
+	transitDem = make(map[uint16]uint64)
+
+	// transitAlloc goes from req.Ingress to req.Egress
+
+	for _, r := range rsvs {
+		if r.ID == req.ID {
+			sameIDAsRequest = r
+		}
+
+		key := sourceIngressEgress{
+			Source:  r.ID.ASID,
+			Ingress: r.Ingress,
+			Egress:  r.Egress,
+		}
+		state := sourceStateMap[key]
+		state.SrcDem += minBW(r.MaxRequestedBW(), globalCapacity)
+		state.SrcAlloc += r.MaxBlockedBW()
+		sourceStateMap[key] = state
+
+		if inMap[r.ID.ASID] == nil {
+			inMap[r.ID.ASID] = make(map[uint16]uint64)
+		}
+		inMap[r.ID.ASID][r.Ingress] += minBW(r.MaxRequestedBW(), globalCapacity)
+		if egMap[r.ID.ASID] == nil {
+			egMap[r.ID.ASID] = make(map[uint16]uint64)
+		}
+		egMap[r.ID.ASID][r.Egress] += minBW(r.MaxRequestedBW(), globalCapacity)
+	}
+	// the transitDem and transitAlloc need the scale factors to be computed:
+	for _, r := range rsvs {
+		inScalFctr := float64(minBW(inMap[r.ID.ASID][r.Ingress], globalCapacity)) /
+			float64(inMap[r.ID.ASID][r.Ingress])
+		egScalFctr := float64(minBW(egMap[r.ID.ASID][r.Egress], globalCapacity)) /
+			float64(egMap[r.ID.ASID][r.Egress])
+		key := sourceIngressEgress{
+			Source:  r.ID.ASID,
+			Ingress: r.Ingress,
+			Egress:  r.Egress,
+		}
+		state := sourceStateMap[key]
+
+		if r.Egress == req.Egress {
+			transitDem[r.Ingress] += uint64(math.Round(float64(state.SrcDem) *
+				math.Min(inScalFctr, egScalFctr)))
+			if r.Ingress == req.Ingress {
+				transitAlloc += r.MaxBlockedBW()
+			}
+		}
+	}
+	return sameIDAsRequest, sourceStateMap, inMap, egMap, transitDem, transitAlloc
+}
+
+func prepareMockForTubeRatio(db *mock_backend.MockDB, rsvs []*segment.Reservation, req *segment.SetupReq,
+	globalCapacity uint64) {
+
+	sameIDAsRequest, sourceStateMap, inMap, egMap, transitDem, transitAlloc :=
+		prepareForMock(rsvs, req, globalCapacity)
+	_ = transitAlloc
+
+	db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).AnyTimes().Return(sameIDAsRequest, nil)
+
+	db.EXPECT().GetTransitDem(gomock.Any(), gomock.Any(), req.Egress).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, ingress, _ uint16) (uint64, error) {
+				return transitDem[ingress], nil
+			})
+
+	db.EXPECT().GetSourceState(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, source addr.AS, ingress, egress uint16) (uint64, uint64, error) {
+				key := sourceIngressEgress{
+					Source:  source,
+					Ingress: ingress,
+					Egress:  egress,
+				}
+				state := sourceStateMap[key]
+				return state.SrcDem, state.SrcAlloc, nil
+			})
+
+	db.EXPECT().GetInDemand(gomock.Any(), req.ID.ASID, gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, _ addr.AS, ingress uint16) (uint64, error) {
+				return inMap[req.ID.ASID][ingress], nil
+			})
+
+	db.EXPECT().GetEgDemand(gomock.Any(), req.ID.ASID, gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, _ addr.AS, egress uint16) (uint64, error) {
+				return egMap[req.ID.ASID][egress], nil
+			})
+}
+
+func prepareMockForLinkRatio(db *mock_backend.MockDB, rsvs []*segment.Reservation, req *segment.SetupReq,
+	globalCapacity uint64) {
+
+	sameIDAsRequest, sourceStateMap, inMap, egMap, transitDem, transitAlloc :=
+		prepareForMock(rsvs, req, globalCapacity)
+	_ = sameIDAsRequest
+	_ = transitDem
+
+	db.EXPECT().GetSegmentRsvFromID(gomock.Any(), &req.ID).AnyTimes().Return(sameIDAsRequest, nil)
+
+	db.EXPECT().GetTransitAlloc(gomock.Any(), req.Ingress, req.Egress).AnyTimes().
+		Return(transitAlloc, nil)
+
+	db.EXPECT().GetSourceState(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, source addr.AS, ingress, egress uint16) (uint64, uint64, error) {
+				key := sourceIngressEgress{
+					Source:  source,
+					Ingress: ingress,
+					Egress:  egress,
+				}
+				state := sourceStateMap[key]
+				return state.SrcDem, state.SrcAlloc, nil
+			})
+
+	db.EXPECT().GetInDemand(gomock.Any(), req.ID.ASID, gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, _ addr.AS, ingress uint16) (uint64, error) {
+				return inMap[req.ID.ASID][ingress], nil
+			})
+
+	db.EXPECT().GetEgDemand(gomock.Any(), req.ID.ASID, gomock.Any()).AnyTimes().
+		DoAndReturn(
+			func(_ context.Context, _ addr.AS, egress uint16) (uint64, error) {
+				return egMap[req.ID.ASID][egress], nil
+			})
 }

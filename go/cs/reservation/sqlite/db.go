@@ -451,6 +451,124 @@ func (x *executor) GetInterfaceUsageEgress(ctx context.Context, ifid uint16) (ui
 	return getInterfaceUsage(ctx, x.db, "state_egress_interface", ifid)
 }
 
+func (x *executor) GetTransitDem(ctx context.Context, ingress, egress uint16) (uint64, error) {
+	query := `SELECT traffic_demand from state_transit_demand
+	WHERE ingress = ? AND egress = ?`
+	var transit uint64
+	if err := x.db.QueryRowContext(ctx, query, ingress, egress).Scan(&transit); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, serrors.WrapStr("get transit failed", err, "ingress", ingress, "egress", egress)
+	}
+	return transit, nil
+}
+
+func (x *executor) PersistTransit(ctx context.Context, ingress, egress uint16,
+	transit uint64) error {
+
+	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
+		query := `INSERT INTO state_transit_demand (ingress, egress, traffic_demand)
+		VALUES(?, ?, ?)
+		ON CONFLICT(ingress,egress) DO UPDATE
+		SET traffic_demand = ?`
+		_, err := tx.ExecContext(ctx, query, ingress, egress, transit, transit)
+		return err
+	})
+	if err != nil {
+		return db.NewTxError("error persisting transit", err)
+	}
+	return nil
+}
+
+func (x *executor) GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (
+	uint64, uint64, error) {
+
+	query := `SELECT src_demand src_alloc FROM state_source_ingress_egress
+	WHERE source = ? AND ingress = ? AND egress = ?`
+	var srcDem, srcAlloc uint64
+	if err := x.db.QueryRowContext(ctx, query, source, ingress, egress).Scan(
+		&srcDem, &srcAlloc); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, 0, nil
+		}
+		return 0, 0, serrors.WrapStr("get source state failed", err)
+	}
+	return srcDem, srcAlloc, nil
+}
+
+func (x *executor) PersistSourceState(ctx context.Context, source addr.AS, ingress, egress uint16,
+	srcDem, srcAlloc uint64) error {
+
+	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
+		query := `INSERT INTO state_source _ingress_egress
+		(source, ingress, egress, src_demand, src_alloc)
+		VALUES(?, ?, ?, ?, ?)
+		ON CONFLICT(source) DO UPDATE
+		SET src_demand = ?, src_alloc = ?`
+		_, err := tx.ExecContext(ctx, query, source, ingress, egress, srcDem, srcAlloc,
+			srcDem, srcAlloc)
+		return err
+	})
+	if err != nil {
+		return db.NewTxError("error persisting source state", err)
+	}
+	return nil
+}
+
+func (x *executor) GetInDemand(ctx context.Context, source addr.AS, ingress uint16) (
+	uint64, error) {
+
+	query := `SELECT demand FROM state_source_ingress
+		WHERE source = ? AND ingress = ?`
+	var demand uint64
+	if err := x.db.QueryRowContext(ctx, query, source, ingress).Scan(&demand); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, serrors.WrapStr("get in demand failed", err)
+	}
+	return demand, nil
+}
+
+func (x *executor) GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (
+	uint64, error) {
+
+	query := `SELECT demand FROM state_source_ingress
+		WHERE source = ? AND ingress = ?`
+	var demand uint64
+	if err := x.db.QueryRowContext(ctx, query, source, egress).Scan(&demand); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, serrors.WrapStr("get eg demand failed", err)
+	}
+	return demand, nil
+}
+
+func (x *executor) GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error) {
+	query := `SELECT traffic_alloc FROM state_transit_alloc
+	WHERE ingress = ? AND egress = ?`
+	var sum uint64
+	if err := x.db.QueryRowContext(ctx, query, ingress, egress).Scan(&sum); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, serrors.WrapStr("get link ratio total sum failed", err)
+	}
+	return sum, nil
+}
+
+func (x *executor) GetRsvsForSource(ctx context.Context,
+	ASID addr.AS) ([]*segment.Reservation, error) {
+
+	rsvs, err := getSegReservations(ctx, x.db, "WHERE id_as = ?", []interface{}{ASID})
+	if err != nil {
+		return nil, serrors.WrapStr("get rsvs for source failed", err, "asid", ASID.String())
+	}
+	return rsvs, nil
+}
+
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
 	const query = `SELECT COUNT(*) FROM seg_reservation`
 	var count int
