@@ -188,39 +188,6 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 	return ratio, nil
 }
 
-func (a *StatefulAdmission) deletemeTODO(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
-
-	capEg := a.Capacities.CapacityEgress(req.Egress)
-	demEg := demsPerSrc[req.ID.ASID].eg
-
-	prevBW := req.AllocTrail.MinMax().ToKbps() // min of maxBW in the trail
-	var egScalFctr float64
-	if demEg != 0 {
-		egScalFctr = float64(minBW(capEg, demEg)) / float64(demEg)
-	}
-	numerator := egScalFctr * float64(prevBW)
-	egScalFctrs := make(map[addr.AS]float64)
-	for src, dem := range demsPerSrc {
-		var egScalFctr float64
-		if dem.eg != 0 {
-			egScalFctr = float64(minBW(capEg, dem.eg)) / float64(dem.eg)
-		}
-		egScalFctrs[src] = egScalFctr
-	}
-
-	maxBWPerSrc, err := x.GetMaxBlockedBWPerSource(ctx, req.ID)
-	if err != nil {
-		return 0, serrors.WrapStr("cannot get max BW per source", err)
-	}
-	denom := float64(prevBW) * egScalFctrs[req.ID.ASID]
-	for asid, maxBW := range maxBWPerSrc {
-		denom += float64(maxBW) * egScalFctrs[asid]
-	}
-
-	return numerator / denom, nil
-}
-
 // demands represents the demands for a given source, and a specific ingress-egress interface pair.
 // from the admission spec: srcDem, inDem and egDem for a given source.
 type demands struct {
@@ -229,54 +196,6 @@ type demands struct {
 
 // demsPerSrc is used in the transit demand computation.
 type demPerSource map[addr.AS]demands
-
-// computeTempDemands will compute inDem, egDem and srcDem grouped by source, for all sources.
-// this is, all cap. requested demands from all reservations, grouped by source, that enter
-// the AS at "ingress" and exit at "egress". It also stores all the source demands that enter
-// the AS at "ingress", and the source demands that exit the AS at "egress".
-func (a *StatefulAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
-	ingress uint16, req *segment.SetupReq) (demPerSource, error) {
-
-	capIn := a.Capacities.CapacityIngress(ingress)
-	capEg := a.Capacities.CapacityEgress(req.Egress)
-
-	rsvs, err := x.GetRsvsPerSource(ctx, ingress, req.Egress)
-	if err != nil {
-		return nil, serrors.WrapStr("cannot obtain segment rsvs. from ingress/egress pair", err)
-	}
-	demsPerSrc := make(demPerSource, len(rsvs))
-	for asid, rsvs := range rsvs {
-		bucket := demands{}
-		for _, rsv := range rsvs {
-			dem := minBW(capIn, capEg, rsv.MaxRequestedBW()) // capReqDem in the formulas
-			if rsv.ID == req.ID {
-				continue
-			}
-			if rsv.Ingress == ingress {
-				bucket.in += dem
-			}
-			if rsv.Egress == req.Egress {
-				bucket.eg += dem
-			}
-			if rsv.Ingress == ingress && rsv.Egress == req.Egress {
-				bucket.src += dem
-			}
-		}
-		demsPerSrc[asid] = bucket
-	}
-
-	// add the request itself to whatever we have for that source
-	bucket := demsPerSrc[req.ID.ASID]
-	dem := minBW(capIn, capEg, req.MaxBW.ToKbps())
-	if req.Ingress == ingress {
-		bucket.in += dem
-		bucket.src += dem
-	}
-	bucket.eg += dem
-	demsPerSrc[req.ID.ASID] = bucket
-
-	return demsPerSrc, nil
-}
 
 // transitDemand obtains the transit demand between req.Ingress and req.Egress
 // by storing the previously computed transit demand, and then adjusting it

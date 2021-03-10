@@ -113,10 +113,6 @@ type OptimizedStore interface {
 
 	// GetTransitAlloc returns the denominator of the linkRatio formula.
 	GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error)
-
-	// GetRsvsForSource returns all reservations for a given source.
-	// TODO(juagargi) possibly obsolete:
-	GetRsvsForSource(ctx context.Context, ASID addr.AS) ([]*segment.Reservation, error)
 }
 
 type ColibriStorage interface {

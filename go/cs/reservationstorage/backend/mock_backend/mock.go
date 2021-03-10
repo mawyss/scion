@@ -218,21 +218,6 @@ func (mr *MockDBMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockDB)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
 }
 
-// GetRsvsForSource mocks base method
-func (m *MockDB) GetRsvsForSource(arg0 context.Context, arg1 addr.AS) ([]*segment.Reservation, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRsvsForSource", arg0, arg1)
-	ret0, _ := ret[0].([]*segment.Reservation)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRsvsForSource indicates an expected call of GetRsvsForSource
-func (mr *MockDBMockRecorder) GetRsvsForSource(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRsvsForSource", reflect.TypeOf((*MockDB)(nil).GetRsvsForSource), arg0, arg1)
-}
-
 // GetRsvsPerSource mocks base method
 func (m *MockDB) GetRsvsPerSource(arg0 context.Context, arg1, arg2 uint16) (map[addr.AS][]*segment.Reservation, error) {
 	m.ctrl.T.Helper()
@@ -632,21 +617,6 @@ func (m *MockTransaction) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 re
 func (mr *MockTransactionMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockTransaction)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
-}
-
-// GetRsvsForSource mocks base method
-func (m *MockTransaction) GetRsvsForSource(arg0 context.Context, arg1 addr.AS) ([]*segment.Reservation, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRsvsForSource", arg0, arg1)
-	ret0, _ := ret[0].([]*segment.Reservation)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRsvsForSource indicates an expected call of GetRsvsForSource
-func (mr *MockTransactionMockRecorder) GetRsvsForSource(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRsvsForSource", reflect.TypeOf((*MockTransaction)(nil).GetRsvsForSource), arg0, arg1)
 }
 
 // GetRsvsPerSource mocks base method

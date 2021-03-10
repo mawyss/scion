@@ -559,16 +559,6 @@ func (x *executor) GetTransitAlloc(ctx context.Context, ingress, egress uint16) 
 	return sum, nil
 }
 
-func (x *executor) GetRsvsForSource(ctx context.Context,
-	ASID addr.AS) ([]*segment.Reservation, error) {
-
-	rsvs, err := getSegReservations(ctx, x.db, "WHERE id_as = ?", []interface{}{ASID})
-	if err != nil {
-		return nil, serrors.WrapStr("get rsvs for source failed", err, "asid", ASID.String())
-	}
-	return rsvs, nil
-}
-
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {
 	const query = `SELECT COUNT(*) FROM seg_reservation`
 	var count int
