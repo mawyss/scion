@@ -40,11 +40,11 @@ var _ admission.Admitter = (*StatelessAdmission)(nil)
 func (a *StatelessAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) error {
 
-	avail, err := a.availableBW(ctx, x, req)
+	avail, err := a.availableBW(ctx, x, *req)
 	if err != nil {
 		return serrors.WrapStr("cannot compute available bandwidth", err, "segment_id", req.ID)
 	}
-	ideal, err := a.idealBW(ctx, x, req)
+	ideal, err := a.idealBW(ctx, x, *req)
 	if err != nil {
 		return serrors.WrapStr("cannot compute ideal bandwidth", err, "segment_id", req.ID)
 	}
@@ -62,7 +62,7 @@ func (a *StatelessAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStor
 }
 
 func (a *StatelessAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq) (uint64, error) {
+	req segment.SetupReq) (uint64, error) {
 
 	sameIngress, err := x.GetSegmentRsvsFromIFPair(ctx, &req.Ingress, nil)
 	if err != nil {
@@ -84,17 +84,13 @@ func (a *StatelessAdmission) availableBW(ctx context.Context, x backend.ColibriS
 }
 
 func (a *StatelessAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq) (uint64, error) {
+	req segment.SetupReq) (uint64, error) {
 
-	demsPerSrcRegIngress, err := a.computeTempDemands(ctx, x, req.Ingress, req)
-	if err != nil {
-		return 0, serrors.WrapStr("cannot compute temporary demands", err)
-	}
-	tubeRatio, err := a.tubeRatio(ctx, x, req, demsPerSrcRegIngress)
+	tubeRatio, err := a.tubeRatio(ctx, x, req)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute tube ratio", err)
 	}
-	linkRatio, err := a.linkRatio(ctx, x, req, demsPerSrcRegIngress)
+	linkRatio, err := a.linkRatio(ctx, x, req)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute link ratio", err)
 	}
@@ -103,143 +99,181 @@ func (a *StatelessAdmission) idealBW(ctx context.Context, x backend.ColibriStora
 }
 
 func (a *StatelessAdmission) tubeRatio(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
+	req segment.SetupReq) (float64, error) {
 
-	// TODO(juagargi) to avoid calling several times to computeTempDemands, refactor the
-	// type holding the results, so that it stores capReqDem per source per ingress interface.
-	// InScalFctr and EgScalFctr will be stored independently, per source per interface.
-	transitDemand, err := a.transitDemand(ctx, req, req.Ingress, demsPerSrc)
+	transitDemand, err := a.transitDemand(ctx, x, req.Ingress, req)
 	if err != nil {
-		return 0, serrors.WrapStr("cannot compute transit demand", err)
+		return 0, serrors.WrapStr("cannot compute tube ratio", err)
 	}
 	capIn := a.Capacities.CapacityIngress(req.Ingress)
 	numerator := minBW(capIn, transitDemand)
+
 	var sum uint64
 	for _, in := range a.Capacities.IngressInterfaces() {
-		demandsForThisIngress, err := a.computeTempDemands(ctx, x, in, req)
+		dem, err := a.transitDemand(ctx, x, in, req)
 		if err != nil {
-			return 0, serrors.WrapStr("cannot compute transit demand", err)
-		}
-		dem, err := a.transitDemand(ctx, req, in, demandsForThisIngress)
-		if err != nil {
-			return 0, serrors.WrapStr("cannot compute transit demand", err)
+			return 0, serrors.WrapStr("cannot compute tube ratio", err)
 		}
 		sum += minBW(a.Capacities.CapacityIngress(in), dem)
+	}
+	if sum == 0 {
+		return 1, nil
 	}
 	return float64(numerator) / float64(sum), nil
 }
 
 func (a *StatelessAdmission) linkRatio(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq, demsPerSrc demPerSource) (float64, error) {
+	req segment.SetupReq) (float64, error) {
 
-	capEg := a.Capacities.CapacityEgress(req.Egress)
-	demEg := demsPerSrc[req.ID.ASID].eg
-
-	prevBW := req.AllocTrail.MinMax().ToKbps() // min of maxBW in the trail
-	var egScalFctr float64
-	if demEg != 0 {
-		egScalFctr = float64(minBW(capEg, demEg)) / float64(demEg)
-	}
-	numerator := egScalFctr * float64(prevBW)
-	egScalFctrs := make(map[addr.AS]float64)
-	for src, dem := range demsPerSrc {
-		var egScalFctr float64
-		if dem.eg != 0 {
-			egScalFctr = float64(minBW(capEg, dem.eg)) / float64(dem.eg)
-		}
-		egScalFctrs[src] = egScalFctr
-	}
-
-	maxBWPerSrc, err := x.GetMaxBlockedBWPerSource(ctx, req.ID)
+	rsvs, err := x.GetAllSegmentRsvs(ctx)
 	if err != nil {
-		return 0, serrors.WrapStr("cannot get max BW per source", err)
+		return 0, serrors.WrapStr("computing transit demand failed", err)
 	}
-	denom := float64(prevBW) * egScalFctrs[req.ID.ASID]
-	for asid, maxBW := range maxBWPerSrc {
-		denom += float64(maxBW) * egScalFctrs[asid]
+	grouped := groupRsvsBySource(rsvs)
+	if _, found := grouped[req.ID.ASID]; !found {
+		// because srcAlloc needs to be called w/ the source for the request, and in the
+		// DB there were none, add a group with that source and 0 reservations from the DB:
+		grouped[req.ID.ASID] = make([]*segment.Reservation, 0)
 	}
 
+	egScalFctr := a.egScalFctr(grouped[req.ID.ASID], req.Egress, req)
+	numerator := egScalFctr * float64(req.PrevBW())
+
+	var denom float64
+	for src, rsvs := range grouped {
+		egScalFctr = a.egScalFctr(rsvs, req.Egress, req)
+		srcAlloc := a.srcAlloc(rsvs, src, req.Ingress, req.Egress, req)
+		denom += egScalFctr * float64(srcAlloc)
+	}
+	if denom == 0 {
+		return 1, nil
+	}
 	return numerator / denom, nil
 }
 
-// demands represents the demands for a given source, and a specific ingress-egress interface pair.
-// from the admission spec: srcDem, inDem and egDem for a given source.
-type demands struct {
-	src, in, eg uint64
-}
+// transitDemand computes the transit demand from ingress to req.Egress .
+func (a *StatelessAdmission) transitDemand(ctx context.Context, x backend.ColibriStorage,
+	ingress uint16, req segment.SetupReq) (uint64, error) {
 
-// demsPerSrc is used in the transit demand computation.
-type demPerSource map[addr.AS]demands
-
-// computeTempDemands will compute inDem, egDem and srcDem grouped by source, for all sources.
-// this is, all cap. requested demands from all reservations, grouped by source, that enter
-// the AS at "ingress" and exit at "egress". It also stores all the source demands that enter
-// the AS at "ingress", and the source demands that exit the AS at "egress".
-func (a *StatelessAdmission) computeTempDemands(ctx context.Context, x backend.ColibriStorage,
-	ingress uint16, req *segment.SetupReq) (demPerSource, error) {
-
-	capIn := a.Capacities.CapacityIngress(ingress)
-	capEg := a.Capacities.CapacityEgress(req.Egress)
-
-	rsvs, err := x.GetRsvsPerSource(ctx, ingress, req.Egress)
+	rsvs, err := x.GetAllSegmentRsvs(ctx)
 	if err != nil {
-		return nil, serrors.WrapStr("cannot obtain segment rsvs. from ingress/egress pair", err)
+		return 0, serrors.WrapStr("computing transit demand failed", err)
 	}
-	demsPerSrc := make(demPerSource, len(rsvs))
-	for asid, rsvs := range rsvs {
-		bucket := demands{}
-		for _, rsv := range rsvs {
-			dem := min3BW(capIn, capEg, rsv.MaxRequestedBW()) // capReqDem in the formulas
-			if rsv.ID == req.ID {
-				continue
-			}
-			if rsv.Ingress == ingress {
-				bucket.in += dem
-			}
-			if rsv.Egress == req.Egress {
-				bucket.eg += dem
-			}
-			if rsv.Ingress == ingress && rsv.Egress == req.Egress {
-				bucket.src += dem
-			}
-		}
-		demsPerSrc[asid] = bucket
+	grouped := groupRsvsBySource(rsvs)
+	var sum uint64
+	for _, rsvs := range grouped {
+		dem := a.adjSrcDem(rsvs, ingress, req.Egress, req)
+		sum += dem
 	}
-
-	// add the request itself to whatever we have for that source
-	bucket := demsPerSrc[req.ID.ASID]
-	dem := min3BW(capIn, capEg, req.MaxBW.ToKbps())
-	if req.Ingress == ingress {
-		bucket.in += dem
-		bucket.src += dem
-	}
-	bucket.eg += dem
-	demsPerSrc[req.ID.ASID] = bucket
-
-	return demsPerSrc, nil
+	return sum, nil
 }
 
-// transitDemand computes the transit demand from ingress to req.Egress. The parameter
-// demsPerSrc must hold the inDem, egDem and srcDem of all reservations, grouped by source, and
-// for an ingress interface = ingress parameter.
-func (a *StatelessAdmission) transitDemand(ctx context.Context, req *segment.SetupReq,
-	ingress uint16, demsPerSrc demPerSource) (uint64, error) {
+// adjSrcDem computes the adjusted source demand.
+// Parameter `rsvs` is all the reservations with the same source.
+// There is no need for a source parameter, as it's not used.
+func (a *StatelessAdmission) adjSrcDem(rsvs []*segment.Reservation, ingress, egress uint16,
+	req segment.SetupReq) uint64 {
+
+	scalFctr := math.Min(a.inScalFctr(rsvs, ingress, req), a.egScalFctr(rsvs, egress, req))
+	srcDem := a.srcDem(rsvs, ingress, egress, req)
+	return uint64(scalFctr * float64(srcDem))
+}
+
+// inScalFctr takes rsvs as all the reservations with the same source
+func (a *StatelessAdmission) inScalFctr(rsvs []*segment.Reservation, ingress uint16,
+	req segment.SetupReq) float64 {
+
+	capIn := a.Capacities.CapacityIngress(ingress)
+	inDem := a.inDem(rsvs, ingress, req)
+	if inDem == 0 {
+		return 1
+	}
+	return float64(minBW(capIn, inDem)) / float64(inDem)
+}
+
+// egScalFctr takes rsvs as all the reservations with the same source
+func (a *StatelessAdmission) egScalFctr(rsvs []*segment.Reservation, egress uint16,
+	req segment.SetupReq) float64 {
+
+	capEg := a.Capacities.CapacityEgress(egress)
+	egDem := a.egDem(rsvs, egress, req)
+	if egDem == 0 {
+		return 1
+	}
+	return float64(minBW(capEg, egDem)) / float64(egDem)
+}
+
+func (a *StatelessAdmission) inDem(rsvs []*segment.Reservation, ingress uint16,
+	req segment.SetupReq) uint64 {
+
+	var inDem uint64
+	for _, eg := range a.Capacities.EgressInterfaces() {
+		inDem += a.srcDem(rsvs, ingress, eg, req)
+	}
+	return inDem
+}
+
+func (a *StatelessAdmission) egDem(rsvs []*segment.Reservation, egress uint16,
+	req segment.SetupReq) uint64 {
+
+	var egDem uint64
+	for _, in := range a.Capacities.IngressInterfaces() {
+		egDem += a.srcDem(rsvs, in, egress, req)
+	}
+	return egDem
+}
+
+// srcDem computes the source demand. Parameter `rsvs` are all reservations with same source.
+func (a *StatelessAdmission) srcDem(rsvs []*segment.Reservation, ingress, egress uint16,
+	req segment.SetupReq) uint64 {
 
 	capIn := a.Capacities.CapacityIngress(ingress)
 	capEg := a.Capacities.CapacityEgress(req.Egress)
-	var transitDem uint64
-	for _, dems := range demsPerSrc {
-		var inScalFctr float64 = 1.
-		if dems.in != 0 {
-			inScalFctr = float64(minBW(capIn, dems.in)) / float64(dems.in)
+	var srcDem uint64
+	for _, r := range rsvs {
+		if r.Ingress == ingress && r.Egress == egress && r.ID != req.ID {
+			capReqDem := minBW(capIn, capEg, a.reqDem(*r, req))
+			srcDem += capReqDem
 		}
-		var egScalFctr float64 = 1.
-		if dems.eg != 0 {
-			egScalFctr = float64(minBW(capEg, dems.eg)) / float64(dems.eg)
-		}
-		transitDem += uint64(math.Min(inScalFctr, egScalFctr) * float64(dems.src))
 	}
-	return transitDem, nil
+	// lastly, add the request demand from the request itself
+	if len(rsvs) > 0 && req.ID.ASID == rsvs[0].ID.ASID &&
+		req.Ingress == ingress && req.Egress == egress {
+
+		capReqDem := minBW(capIn, capEg, req.MaxBW.ToKbps())
+		srcDem += capReqDem
+	}
+	return srcDem
+}
+
+func (a *StatelessAdmission) reqDem(r segment.Reservation, req segment.SetupReq) uint64 {
+	var bw uint64
+	if r.ID == req.ID {
+		bw = req.MaxBW.ToKbps()
+	} else {
+		bw = r.MaxRequestedBW()
+	}
+	return bw
+}
+
+// srcAlloc computes how much bandwidth is allocated between ingress and egress, for
+// a given source `source`. All reservations in `rsvs` are from `source`.
+func (a *StatelessAdmission) srcAlloc(rsvs []*segment.Reservation, source addr.AS,
+	ingress, egress uint16, req segment.SetupReq) uint64 {
+
+	var sum uint64
+	for _, r := range rsvs {
+		if r.Ingress == ingress && r.Egress == egress {
+			if r.ID != req.ID {
+				sum += r.MaxBlockedBW()
+			}
+		}
+
+	}
+	if source == req.ID.ASID {
+		sum += req.PrevBW()
+	}
+	return sum
 }
 
 // sumMaxBlockedBW adds up all the max blocked bandwidth by the reservation, for all reservations,
@@ -254,13 +288,21 @@ func sumMaxBlockedBW(rsvs []*segment.Reservation, excludeThisRsv reservation.Seg
 	return total
 }
 
-func minBW(a, b uint64) uint64 {
-	if a < b {
-		return a
+func minBW(a uint64, bws ...uint64) uint64 {
+	min := a
+	for _, bw := range bws {
+		if bw < min {
+			min = bw
+		}
 	}
-	return b
+	return min
 }
 
-func min3BW(a, b, c uint64) uint64 {
-	return minBW(minBW(a, b), c)
+func groupRsvsBySource(rsvs []*segment.Reservation) map[addr.AS][]*segment.Reservation {
+	grouped := make(map[addr.AS][]*segment.Reservation)
+	for _, rsv := range rsvs {
+		source := rsv.ID.ASID
+		grouped[source] = append(grouped[source], rsv)
+	}
+	return grouped
 }
