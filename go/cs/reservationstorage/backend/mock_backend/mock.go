@@ -203,21 +203,6 @@ func (mr *MockDBMockRecorder) GetInterfaceUsageIngress(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageIngress", reflect.TypeOf((*MockDB)(nil).GetInterfaceUsageIngress), arg0, arg1)
 }
 
-// GetMaxBlockedBWPerSource mocks base method
-func (m *MockDB) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 reservation.SegmentID) (map[addr.AS]uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaxBlockedBWPerSource", arg0, arg1)
-	ret0, _ := ret[0].(map[addr.AS]uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaxBlockedBWPerSource indicates an expected call of GetMaxBlockedBWPerSource
-func (mr *MockDBMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockDB)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
-}
-
 // GetRsvsPerSource mocks base method
 func (m *MockDB) GetRsvsPerSource(arg0 context.Context, arg1, arg2 uint16) (map[addr.AS][]*segment.Reservation, error) {
 	m.ctrl.T.Helper()
@@ -602,21 +587,6 @@ func (m *MockTransaction) GetInterfaceUsageIngress(arg0 context.Context, arg1 ui
 func (mr *MockTransactionMockRecorder) GetInterfaceUsageIngress(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceUsageIngress", reflect.TypeOf((*MockTransaction)(nil).GetInterfaceUsageIngress), arg0, arg1)
-}
-
-// GetMaxBlockedBWPerSource mocks base method
-func (m *MockTransaction) GetMaxBlockedBWPerSource(arg0 context.Context, arg1 reservation.SegmentID) (map[addr.AS]uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaxBlockedBWPerSource", arg0, arg1)
-	ret0, _ := ret[0].(map[addr.AS]uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaxBlockedBWPerSource indicates an expected call of GetMaxBlockedBWPerSource
-func (mr *MockTransactionMockRecorder) GetMaxBlockedBWPerSource(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxBlockedBWPerSource", reflect.TypeOf((*MockTransaction)(nil).GetMaxBlockedBWPerSource), arg0, arg1)
 }
 
 // GetRsvsPerSource mocks base method

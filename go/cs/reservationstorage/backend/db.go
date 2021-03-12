@@ -82,10 +82,6 @@ type OptimizedStore interface {
 	GetRsvsPerSource(ctx context.Context, ingress, egress uint16) (
 		map[addr.AS][]*segment.Reservation, error)
 
-	// GetMaxBlockedBWPerSource returns the blocked BW per source AS ID.
-	GetMaxBlockedBWPerSource(ctx context.Context, skipRsv reservation.SegmentID) (
-		map[addr.AS]uint64, error)
-
 	// TODO(juagargi) the two ^^ previous calls are obsolete
 
 	// GetInterfaceUsageIngress returns the bandwidth already blocked in ingress interface `ifid`.

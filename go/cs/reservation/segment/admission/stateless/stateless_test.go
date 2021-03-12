@@ -335,8 +335,6 @@ func TestLinkRatio(t *testing.T) {
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:aaaa:9999", "aaaabbbb"))
 			},
 		},
 		"same request": {
@@ -347,8 +345,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "beefcafe", 1, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 		"same source": {
@@ -360,8 +356,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 		"different sources": {
@@ -373,8 +367,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:3", "00000001", 1, 2, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 		"different egress interface": {
@@ -385,8 +377,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 3, 5, 5, 5),
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 		"smaller prevBW": {
@@ -397,8 +387,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 		"bigger prevBW": {
@@ -409,8 +397,6 @@ func TestLinkRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5), // 128 Kbps
 				}
 				db.EXPECT().GetAllSegmentRsvs(gomock.Any()).AnyTimes().Return(rsvs, nil)
-				db.EXPECT().GetMaxBlockedBWPerSource(gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getMaxBWPerSource(t, rsvs, "ff00:1:1", "beefcafe"))
 			},
 		},
 	}
