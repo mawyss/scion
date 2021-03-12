@@ -95,16 +95,11 @@ func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriSt
 func (a *StatefulAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) (uint64, error) {
 
-	// demsPerSrcRegIngress, err := a.computeTempDemands(ctx, x, req.Ingress, req)
-	// if err != nil {
-	// 	return 0, serrors.WrapStr("cannot compute temporary demands", err)
-	// }
 	tubeRatio, err := a.tubeRatio(ctx, x, req)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute tube ratio", err)
 	}
 	linkRatio, err := a.linkRatio(ctx, x, req)
-	// linkRatio, err := a.linkRatio(ctx, x, req, demsPerSrcRegIngress)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute link ratio", err)
 	}
@@ -168,7 +163,7 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 	if err != nil {
 		return 0, serrors.WrapStr("computing link ratio failed", err)
 	}
-	prevBW := req.AllocTrail.MinMax().ToKbps() // min of maxBW in the trail
+	prevBW := req.PrevBW()
 	srcAlloc := storedSrcAlloc + prevBW
 	rsv, err := x.GetSegmentRsvFromID(ctx, &req.ID)
 	if err != nil {
@@ -181,21 +176,11 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 	}
 	denominator += uint64(math.Round(egScalFctr * float64(srcAlloc)))
 
-	// numerator
 	numerator := math.Floor(math.Round(egScalFctr * float64(prevBW)))
 
 	ratio := numerator / float64(denominator)
 	return ratio, nil
 }
-
-// demands represents the demands for a given source, and a specific ingress-egress interface pair.
-// from the admission spec: srcDem, inDem and egDem for a given source.
-type demands struct {
-	src, in, eg uint64
-}
-
-// demsPerSrc is used in the transit demand computation.
-type demPerSource map[addr.AS]demands
 
 // transitDemand obtains the transit demand between req.Ingress and req.Egress
 // by storing the previously computed transit demand, and then adjusting it
@@ -368,14 +353,3 @@ func minBW(a uint64, bws ...uint64) uint64 {
 	}
 	return min
 }
-
-// func minBW(a, b uint64, bws ...uint64) uint64 {
-// 	if a < b {
-// 		return a
-// 	}
-// 	return b
-// }
-
-// func min3BW(a, b, c uint64) uint64 {
-// 	return minBW(minBW(a, b), c)
-// }

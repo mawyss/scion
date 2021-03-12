@@ -240,7 +240,7 @@ func TestTubeRatio(t *testing.T) {
 			req:       newTestRequest(t, 1, 2, 3, 3), // 64Kbps
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{
-					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 3, 3), // 64Kbps
+					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 3, 3, 3), // 64Kbps
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5), // 128Kbps
 				}
 				req := newTestRequest(t, 1, 2, 3, 3)

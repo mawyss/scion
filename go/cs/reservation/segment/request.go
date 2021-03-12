@@ -68,6 +68,11 @@ type SetupReq struct {
 	AllocTrail reservation.AllocationBeads
 }
 
+// PrevBW returns the minimum of the maximum bandwidths already granted by previous ASes.
+func (r SetupReq) PrevBW() uint64 {
+	return r.AllocTrail.MinMax().ToKbps()
+}
+
 // SetupTelesReq represents a telescopic segment setup.
 type SetupTelesReq struct {
 	SetupReq
