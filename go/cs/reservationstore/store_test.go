@@ -34,7 +34,7 @@ import (
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
-const REPS = 10
+const REPS = 100
 
 func TestStore(t *testing.T) {
 	var s reservationstorage.Store = &reservationstore.Store{}
@@ -98,10 +98,10 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 0.0
-				differentSrcASesCount := float64(count) * ratio / 100.0
-				sameSourceASID := count - int(differentSrcASesCount)
+				sameSourceASID := int(float64(count) * ratio / 100.0)
+				differentSrcASesCount := count - sameSourceASID
 				return timeAdmitSegmentReservationTwoDimensions(t,
-					sameSourceASID, int(differentSrcASesCount))
+					sameSourceASID, differentSrcASesCount)
 			},
 			Filter:             identity,
 			DebugPrintProgress: true,
@@ -114,10 +114,10 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 10.0
-				differentSrcASesCount := float64(count) * ratio / 100.0
-				sameSourceASID := count - int(differentSrcASesCount)
+				sameSourceASID := int(float64(count) * ratio / 100.0)
+				differentSrcASesCount := count - sameSourceASID
 				return timeAdmitSegmentReservationTwoDimensions(t,
-					sameSourceASID, int(differentSrcASesCount))
+					sameSourceASID, differentSrcASesCount)
 			},
 			Filter:             identity,
 			DebugPrintProgress: true,
@@ -130,10 +130,10 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 50.0
-				differentSrcASesCount := float64(count) * ratio / 100.0
-				sameSourceASID := count - int(differentSrcASesCount)
+				sameSourceASID := int(float64(count) * ratio / 100.0)
+				differentSrcASesCount := count - sameSourceASID
 				return timeAdmitSegmentReservationTwoDimensions(t,
-					sameSourceASID, int(differentSrcASesCount))
+					sameSourceASID, differentSrcASesCount)
 			},
 			Filter:             identity,
 			DebugPrintProgress: true,
@@ -146,10 +146,10 @@ func TestPerformanceCOLIBRI(t *testing.T) {
 			Repetitions: REPS,
 			Function: func(t *testing.T, count int) time.Duration {
 				ratio := 90.0
-				differentSrcASesCount := float64(count) * ratio / 100.0
-				sameSourceASID := count - int(differentSrcASesCount)
+				sameSourceASID := int(float64(count) * ratio / 100.0)
+				differentSrcASesCount := count - sameSourceASID
 				return timeAdmitSegmentReservationTwoDimensions(t,
-					sameSourceASID, int(differentSrcASesCount))
+					sameSourceASID, differentSrcASesCount)
 			},
 			Filter:             identity,
 			DebugPrintProgress: true,
@@ -373,7 +373,7 @@ func benchmarkAdmitSegmentReservation(b *testing.B, count int) {
 	defer db.Close()
 
 	cap := newCapacities()
-	admitter := newAdmitter(cap)
+	admitter := newStatefulAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
 
 	AddSegmentReservation(b, db, "ff00:1:1", count)
@@ -407,7 +407,7 @@ func timeAdmitSegmentReservationTwoDimensions(t *testing.T,
 	defer db.Close()
 
 	cap := newCapacities()
-	admitter := newAdmitter(cap)
+	admitter := newStatefulAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
 
 	thisASID := "ff00:10:111"
@@ -463,7 +463,7 @@ func timeAdmitE2EReservationTwoDimensions(t *testing.T, countSegments, countE2E 
 
 	// now perform the actual E2E admission
 	cap := newCapacities()
-	admitter := newAdmitter(cap)
+	admitter := newStatefulAdmitter(cap)
 	s := reservationstore.NewStore(db, admitter)
 
 	successfulReq := newTestE2ESuccessReq(t, "ff00:1:1")

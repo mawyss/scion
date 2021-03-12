@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -595,6 +596,11 @@ func newSuffix(ctx context.Context, x db.Sqler, ASID addr.AS) (uint32, error) {
 		return 0, serrors.WrapStr("unexpected error getting new suffix", err)
 	}
 	return suffix, nil
+}
+
+func newSuffixNotDeterministic(ctx context.Context, x db.Sqler, ASID addr.AS) (uint32, error) {
+	// TODO(juagargi) this is a temporary hack
+	return rand.Uint32(), nil
 }
 
 func insertNewSegReservation(ctx context.Context, x *sql.Tx, rsv *segment.Reservation,

@@ -113,6 +113,11 @@ type OptimizedStore interface {
 
 	// GetTransitAlloc returns the denominator of the linkRatio formula.
 	GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error)
+
+	// TODO(juagargi) missing state persistance functions for InterfaceUsageIngress/Egress,
+	// InDemand/EgDemand, and TransitAlloc
+
+	// TODO(juagargi) missing calling those ^^ functions when modifying the reservations / indices
 }
 
 type ColibriStorage interface {

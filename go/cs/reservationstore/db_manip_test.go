@@ -25,6 +25,7 @@ import (
 	"github.com/scionproto/scion/go/cs/reservation/e2e"
 	"github.com/scionproto/scion/go/cs/reservation/segment"
 	"github.com/scionproto/scion/go/cs/reservation/segment/admission"
+	"github.com/scionproto/scion/go/cs/reservation/segment/admission/stateful"
 	"github.com/scionproto/scion/go/cs/reservation/segment/admission/stateless"
 	"github.com/scionproto/scion/go/cs/reservation/segmenttest"
 	"github.com/scionproto/scion/go/cs/reservation/sqlite"
@@ -159,8 +160,15 @@ func newCapacities() base.Capacities {
 	}
 }
 
-func newAdmitter(cap base.Capacities) admission.Admitter {
+func newStatelessAdmitter(cap base.Capacities) admission.Admitter {
 	admitter := &stateless.StatelessAdmission{
+		Capacities: cap,
+		Delta:      1,
+	}
+	return admitter
+}
+func newStatefulAdmitter(cap base.Capacities) admission.Admitter {
+	admitter := &stateful.StatefulAdmission{
 		Capacities: cap,
 		Delta:      1,
 	}
