@@ -213,8 +213,6 @@ func TestTubeRatio(t *testing.T) {
 			setupDB: func(db *mock_backend.MockDB) {
 				rsvs := []*segment.Reservation{}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
@@ -228,8 +226,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000001", 1, 2, 5, 5, 5),
 				}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
@@ -244,8 +240,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5), // 128Kbps
 				}
 				req := newTestRequest(t, 1, 2, 3, 3)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
@@ -260,8 +254,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 
 			},
@@ -278,8 +270,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
@@ -295,8 +285,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:1", "00000002", 3, 2, 5, 5, 5),
 				}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource(rsvs), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 10)
 			},
 			globalCapacity: 10,
@@ -316,9 +304,6 @@ func TestTubeRatio(t *testing.T) {
 					testNewRsv(t, "ff00:1:4", "00000002", 5, 4, 5, 9, 9),
 				}
 				req := newTestRequest(t, 1, 2, 5, 5)
-				db.EXPECT().GetRsvsPerSource(gomock.Any(), gomock.Any(), gomock.Any()).
-					AnyTimes().Return(getRsvsPerSource([]*segment.Reservation{
-					rsvs[0], rsvs[1], rsvs[2]}), nil)
 				prepareMockForTubeRatio(db, rsvs, req, 1024*1024)
 			},
 			globalCapacity: 1024 * 1024,
@@ -551,14 +536,6 @@ func testAddAllocTrail(req *segment.SetupReq, beads ...reservation.BWCls) *segme
 		req.AllocTrail = append(req.AllocTrail, beads)
 	}
 	return req
-}
-
-func getRsvsPerSource(rsvs []*segment.Reservation) map[addr.AS][]*segment.Reservation {
-	demPerSrc := make(map[addr.AS][]*segment.Reservation)
-	for _, r := range rsvs {
-		demPerSrc[r.ID.ASID] = append(demPerSrc[r.ID.ASID], r)
-	}
-	return demPerSrc
 }
 
 func getMaxBWPerSource(t *testing.T, rsvs []*segment.Reservation, skipASID, skipSuffix string) (

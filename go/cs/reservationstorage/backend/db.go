@@ -78,12 +78,6 @@ type ReserverAndTransit interface {
 
 // OptimizedStore is implemented by all DBs.
 type OptimizedStore interface {
-	// GetRsvsPerSource returns the reservations grouped by source that have this ingress OR egress.
-	GetRsvsPerSource(ctx context.Context, ingress, egress uint16) (
-		map[addr.AS][]*segment.Reservation, error)
-
-	// TODO(juagargi) the two ^^ previous calls are obsolete
-
 	// GetInterfaceUsageIngress returns the bandwidth already blocked in ingress interface `ifid`.
 	GetInterfaceUsageIngress(ctx context.Context, ifid uint16) (uint64, error)
 

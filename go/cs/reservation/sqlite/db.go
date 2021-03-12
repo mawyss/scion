@@ -382,23 +382,6 @@ func (x *executor) PersistE2ERsv(ctx context.Context, rsv *e2e.Reservation) erro
 	return nil
 }
 
-func (x *executor) GetRsvsPerSource(ctx context.Context,
-	ingress, egress uint16) (map[addr.AS][]*segment.Reservation, error) {
-
-	demPerSource := make(map[addr.AS][]*segment.Reservation)
-
-	rsvs, err := getSegReservations(ctx, x.db, "WHERE ingress=? OR egress=?",
-		[]interface{}{ingress, egress})
-	if err != nil {
-		return nil, err
-	}
-	for _, r := range rsvs {
-		demPerSource[r.ID.ASID] = append(demPerSource[r.ID.ASID], r)
-	}
-
-	return demPerSource, nil
-}
-
 func (x *executor) GetInterfaceUsageIngress(ctx context.Context, ifid uint16) (uint64, error) {
 	return getInterfaceUsage(ctx, x.db, "state_ingress_interface", ifid)
 }
