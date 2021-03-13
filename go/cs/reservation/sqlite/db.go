@@ -470,10 +470,10 @@ func (x *executor) PersistSourceState(ctx context.Context, source addr.AS, ingre
 	srcDem, srcAlloc uint64) error {
 
 	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
-		query := `INSERT INTO state_source _ingress_egress
+		query := `INSERT INTO state_source_ingress_egress
 		(source, ingress, egress, src_demand, src_alloc)
 		VALUES(?, ?, ?, ?, ?)
-		ON CONFLICT(source) DO UPDATE
+		ON CONFLICT(source,ingress,egress) DO UPDATE
 		SET src_demand = ?, src_alloc = ?`
 		_, err := tx.ExecContext(ctx, query, source, ingress, egress, srcDem, srcAlloc,
 			srcDem, srcAlloc)

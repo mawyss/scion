@@ -109,8 +109,6 @@ type OptimizedStore interface {
 
 	GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (uint64, error)
 	PersistEgDemand(ctx context.Context, source addr.AS, egress uint16, demand uint64) error
-
-	// TODO(juagargi) missing calling those ^^ functions when modifying the reservations / indices
 }
 
 type ColibriStorage interface {
