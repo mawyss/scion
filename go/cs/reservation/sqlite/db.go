@@ -500,6 +500,23 @@ func (x *executor) GetInDemand(ctx context.Context, source addr.AS, ingress uint
 	return demand, nil
 }
 
+func (x *executor) PersistInDemand(ctx context.Context, source addr.AS, ingress uint16,
+	demand uint64) error {
+
+	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
+		query := `INSERT INTO state_source_ingress (source, ingress, demand)
+				VALUES(?, ?, ?)
+				ON CONFLICT(source,ingress) DO UPDATE
+				SET demand = ?`
+		_, err := tx.ExecContext(ctx, query, source, ingress, demand, demand)
+		return err
+	})
+	if err != nil {
+		return db.NewTxError("error persisting ingress demand", err)
+	}
+	return nil
+}
+
 func (x *executor) GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (
 	uint64, error) {
 
@@ -513,6 +530,23 @@ func (x *executor) GetEgDemand(ctx context.Context, source addr.AS, egress uint1
 		return 0, serrors.WrapStr("get eg demand failed", err)
 	}
 	return demand, nil
+}
+
+func (x *executor) PersistEgDemand(ctx context.Context, source addr.AS, egress uint16,
+	demand uint64) error {
+
+	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
+		query := `INSERT INTO state_source_egress (source, egress, demand)
+				VALUES(?, ?, ?)
+				ON CONFLICT(source,egress) DO UPDATE
+				SET demand = ?`
+		_, err := tx.ExecContext(ctx, query, source, egress, demand, demand)
+		return err
+	})
+	if err != nil {
+		return db.NewTxError("error persisting egress demand", err)
+	}
+	return nil
 }
 
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {

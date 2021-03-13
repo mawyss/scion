@@ -105,10 +105,10 @@ type OptimizedStore interface {
 		srcDem, srcAlloc uint64) error
 
 	GetInDemand(ctx context.Context, source addr.AS, ingress uint16) (uint64, error)
-	GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (uint64, error)
+	PersistInDemand(ctx context.Context, source addr.AS, ingress uint16, demand uint64) error
 
-	// TODO(juagargi) missing state persistance functions for InterfaceUsageIngress/Egress,
-	// InDemand/EgDemand, and TransitAlloc
+	GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (uint64, error)
+	PersistEgDemand(ctx context.Context, source addr.AS, egress uint16, demand uint64) error
 
 	// TODO(juagargi) missing calling those ^^ functions when modifying the reservations / indices
 }

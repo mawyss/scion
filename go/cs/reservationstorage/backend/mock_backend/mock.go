@@ -337,6 +337,34 @@ func (mr *MockDBMockRecorder) PersistE2ERsv(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistE2ERsv", reflect.TypeOf((*MockDB)(nil).PersistE2ERsv), arg0, arg1)
 }
 
+// PersistEgDemand mocks base method
+func (m *MockDB) PersistEgDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistEgDemand", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistEgDemand indicates an expected call of PersistEgDemand
+func (mr *MockDBMockRecorder) PersistEgDemand(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistEgDemand", reflect.TypeOf((*MockDB)(nil).PersistEgDemand), arg0, arg1, arg2, arg3)
+}
+
+// PersistInDemand mocks base method
+func (m *MockDB) PersistInDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistInDemand", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistInDemand indicates an expected call of PersistInDemand
+func (mr *MockDBMockRecorder) PersistInDemand(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistInDemand", reflect.TypeOf((*MockDB)(nil).PersistInDemand), arg0, arg1, arg2, arg3)
+}
+
 // PersistSegmentRsv mocks base method
 func (m *MockDB) PersistSegmentRsv(arg0 context.Context, arg1 *segment.Reservation) error {
 	m.ctrl.T.Helper()
@@ -720,6 +748,34 @@ func (m *MockTransaction) PersistE2ERsv(arg0 context.Context, arg1 *e2e.Reservat
 func (mr *MockTransactionMockRecorder) PersistE2ERsv(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistE2ERsv", reflect.TypeOf((*MockTransaction)(nil).PersistE2ERsv), arg0, arg1)
+}
+
+// PersistEgDemand mocks base method
+func (m *MockTransaction) PersistEgDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistEgDemand", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistEgDemand indicates an expected call of PersistEgDemand
+func (mr *MockTransactionMockRecorder) PersistEgDemand(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistEgDemand", reflect.TypeOf((*MockTransaction)(nil).PersistEgDemand), arg0, arg1, arg2, arg3)
+}
+
+// PersistInDemand mocks base method
+func (m *MockTransaction) PersistInDemand(arg0 context.Context, arg1 addr.AS, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistInDemand", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistInDemand indicates an expected call of PersistInDemand
+func (mr *MockTransactionMockRecorder) PersistInDemand(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistInDemand", reflect.TypeOf((*MockTransaction)(nil).PersistInDemand), arg0, arg1, arg2, arg3)
 }
 
 // PersistSegmentRsv mocks base method
