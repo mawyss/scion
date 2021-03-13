@@ -403,7 +403,7 @@ func (x *executor) GetTransitDem(ctx context.Context, ingress, egress uint16) (u
 	return transit, nil
 }
 
-func (x *executor) PersistTransit(ctx context.Context, ingress, egress uint16,
+func (x *executor) PersistTransitDem(ctx context.Context, ingress, egress uint16,
 	transit uint64) error {
 
 	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
