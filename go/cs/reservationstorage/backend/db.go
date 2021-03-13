@@ -87,11 +87,14 @@ type OptimizedStore interface {
 	// GetTransitDem returns the stored transit demand between ingress and egress.
 	GetTransitDem(ctx context.Context, ingress, egress uint16) (uint64, error)
 
-	// PersistTransitDem stores the transit state between ingress and egress.
+	// PersistTransitDem stores the transit demand between ingress and egress.
 	PersistTransitDem(ctx context.Context, ingress, egress uint16, transit uint64) error
 
 	// GetTransitAlloc returns the denominator of the linkRatio formula.
 	GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error)
+
+	// PersistTransitAlloc stores the transit alloc between ingress and egress.
+	PersistTransitAlloc(ctx context.Context, ingress, egress uint16, transit uint64) error
 
 	// GetSourceState returns the srcDem and srcAlloc for a source,ingress,egress tuple.
 	GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (

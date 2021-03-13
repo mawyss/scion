@@ -365,18 +365,32 @@ func (mr *MockDBMockRecorder) PersistSourceState(arg0, arg1, arg2, arg3, arg4, a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSourceState", reflect.TypeOf((*MockDB)(nil).PersistSourceState), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
-// PersistTransit mocks base method
-func (m *MockDB) PersistTransit(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+// PersistTransitAlloc mocks base method
+func (m *MockDB) PersistTransitAlloc(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PersistTransit", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PersistTransitAlloc", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PersistTransit indicates an expected call of PersistTransit
-func (mr *MockDBMockRecorder) PersistTransit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// PersistTransitAlloc indicates an expected call of PersistTransitAlloc
+func (mr *MockDBMockRecorder) PersistTransitAlloc(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransit", reflect.TypeOf((*MockDB)(nil).PersistTransit), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransitAlloc", reflect.TypeOf((*MockDB)(nil).PersistTransitAlloc), arg0, arg1, arg2, arg3)
+}
+
+// PersistTransitDem mocks base method
+func (m *MockDB) PersistTransitDem(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistTransitDem", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistTransitDem indicates an expected call of PersistTransitDem
+func (mr *MockDBMockRecorder) PersistTransitDem(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransitDem", reflect.TypeOf((*MockDB)(nil).PersistTransitDem), arg0, arg1, arg2, arg3)
 }
 
 // SetMaxIdleConns mocks base method
@@ -736,18 +750,32 @@ func (mr *MockTransactionMockRecorder) PersistSourceState(arg0, arg1, arg2, arg3
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistSourceState", reflect.TypeOf((*MockTransaction)(nil).PersistSourceState), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
-// PersistTransit mocks base method
-func (m *MockTransaction) PersistTransit(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+// PersistTransitAlloc mocks base method
+func (m *MockTransaction) PersistTransitAlloc(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PersistTransit", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "PersistTransitAlloc", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PersistTransit indicates an expected call of PersistTransit
-func (mr *MockTransactionMockRecorder) PersistTransit(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// PersistTransitAlloc indicates an expected call of PersistTransitAlloc
+func (mr *MockTransactionMockRecorder) PersistTransitAlloc(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransit", reflect.TypeOf((*MockTransaction)(nil).PersistTransit), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransitAlloc", reflect.TypeOf((*MockTransaction)(nil).PersistTransitAlloc), arg0, arg1, arg2, arg3)
+}
+
+// PersistTransitDem mocks base method
+func (m *MockTransaction) PersistTransitDem(arg0 context.Context, arg1, arg2 uint16, arg3 uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PersistTransitDem", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PersistTransitDem indicates an expected call of PersistTransitDem
+func (mr *MockTransactionMockRecorder) PersistTransitDem(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PersistTransitDem", reflect.TypeOf((*MockTransaction)(nil).PersistTransitDem), arg0, arg1, arg2, arg3)
 }
 
 // Rollback mocks base method

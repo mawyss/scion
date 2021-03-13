@@ -398,7 +398,7 @@ func (x *executor) GetTransitDem(ctx context.Context, ingress, egress uint16) (u
 		if err == sql.ErrNoRows {
 			return 0, nil
 		}
-		return 0, serrors.WrapStr("get transit failed", err, "ingress", ingress, "egress", egress)
+		return 0, serrors.WrapStr("get transit demand failed", err, "ingress", ingress, "egress", egress)
 	}
 	return transit, nil
 }
@@ -415,7 +415,7 @@ func (x *executor) PersistTransitDem(ctx context.Context, ingress, egress uint16
 		return err
 	})
 	if err != nil {
-		return db.NewTxError("error persisting transit", err)
+		return db.NewTxError("error persisting transit demand", err)
 	}
 	return nil
 }
@@ -428,9 +428,26 @@ func (x *executor) GetTransitAlloc(ctx context.Context, ingress, egress uint16) 
 		if err == sql.ErrNoRows {
 			return 0, nil
 		}
-		return 0, serrors.WrapStr("get link ratio total sum failed", err)
+		return 0, serrors.WrapStr("get transit alloc failed", err)
 	}
 	return sum, nil
+}
+
+func (x *executor) PersistTransitAlloc(ctx context.Context, ingress, egress uint16,
+	transit uint64) error {
+
+	err := db.DoInTx(ctx, x.db, func(ctx context.Context, tx *sql.Tx) error {
+		query := `INSERT INTO state_transit_alloc (ingress, egress, traffic_alloc)
+			VALUES(?, ?, ?)
+			ON CONFLICT(ingress,egress) DO UPDATE
+			SET traffic_alloc = ?`
+		_, err := tx.ExecContext(ctx, query, ingress, egress, transit, transit)
+		return err
+	})
+	if err != nil {
+		return db.NewTxError("error persisting transit alloc", err)
+	}
+	return nil
 }
 
 func (x *executor) GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (
