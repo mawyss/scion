@@ -156,7 +156,7 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 		return 0, serrors.WrapStr("computing link ratio failed", err)
 	}
 	storedEgScalFctr := a.computeEgScalFctr(req.Egress, storedEgDem)
-	denominator -= uint64(math.Round(storedEgScalFctr * float64(storedSrcAlloc)))
+	denominator -= uint64(storedEgScalFctr * float64(storedSrcAlloc))
 
 	// adjust by adding the computed egScalFctr and srcAlloc
 	egScalFctr, err := a.egScalFctr(ctx, x, req.ID.ASID, req.Egress, *req)
@@ -174,9 +174,9 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 		// the ID of the request
 		srcAlloc -= rsv.MaxBlockedBW()
 	}
-	denominator += uint64(math.Round(egScalFctr * float64(srcAlloc)))
+	denominator += uint64(egScalFctr * float64(srcAlloc))
 
-	numerator := math.Floor(math.Round(egScalFctr * float64(prevBW)))
+	numerator := egScalFctr * float64(prevBW)
 
 	ratio := numerator / float64(denominator)
 	return ratio, nil
@@ -221,7 +221,7 @@ func (a *StatefulAdmission) adjSrcDemDifference(ctx context.Context, x backend.C
 		}
 		inScalFctr := a.computeInScalFctr(ingress, inDem)
 		egScalFctr := a.computeEgScalFctr(req.Egress, egDem)
-		storedSrcDem = uint64(math.Round(math.Min(inScalFctr, egScalFctr) * float64(storedSrcDem)))
+		storedSrcDem = uint64(math.Min(inScalFctr, egScalFctr) * float64(storedSrcDem))
 	}
 	// computed
 	srcDem, err := a.srcDem(ctx, x, req.ID.ASID, ingress, req.Egress, req)
@@ -238,7 +238,7 @@ func (a *StatefulAdmission) adjSrcDemDifference(ctx context.Context, x backend.C
 		if err != nil {
 			return 0, err
 		}
-		computedSrcDem = uint64(math.Round(math.Min(inScalFctr, egScalFctr) * float64(srcDem)))
+		computedSrcDem = uint64(math.Min(inScalFctr, egScalFctr) * float64(srcDem))
 	}
 	return int64(computedSrcDem - storedSrcDem), nil
 }

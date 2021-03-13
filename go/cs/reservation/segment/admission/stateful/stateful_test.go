@@ -620,8 +620,8 @@ func prepareForMock(rsvs []*segment.Reservation, req *segment.SetupReq, globalCa
 		state := sourceStateMap[key]
 
 		if r.Egress == req.Egress {
-			transitDem[r.Ingress] += uint64(math.Round(float64(state.SrcDem) *
-				math.Min(inScalFctr, egScalFctr)))
+			transitDem[r.Ingress] += uint64(float64(state.SrcDem) *
+				math.Min(inScalFctr, egScalFctr))
 			if r.Ingress == req.Ingress {
 				transitAlloc += r.MaxBlockedBW()
 			}
