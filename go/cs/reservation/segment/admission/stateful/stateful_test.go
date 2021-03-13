@@ -326,7 +326,8 @@ func TestTubeRatio(t *testing.T) {
 			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			ratio, err := adm.tubeRatio(ctx, db, tc.req)
+			pad := &ScratchPad{}
+			ratio, err := adm.tubeRatio(ctx, db, tc.req, pad)
 			require.NoError(t, err)
 			require.Equal(t, tc.tubeRatio, ratio)
 		})
@@ -433,7 +434,8 @@ func TestLinkRatio(t *testing.T) {
 			tc.setupDB(db.(*mock_backend.MockDB))
 
 			ctx := context.Background()
-			linkRatio, err := adm.linkRatio(ctx, db, tc.req)
+			pad := &ScratchPad{}
+			linkRatio, err := adm.linkRatio(ctx, db, tc.req, pad)
 			require.NoError(t, err)
 			require.Equal(t, tc.linkRatio, linkRatio)
 		})

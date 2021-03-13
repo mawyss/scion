@@ -40,13 +40,14 @@ var _ admission.Admitter = (*StatefulAdmission)(nil)
 func (a *StatefulAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStorage,
 	req *segment.SetupReq) error {
 
+	pad := &ScratchPad{}
 	avail, err := a.availableBW(ctx, x, req)
 	if err != nil {
-		return serrors.WrapStr("cannot compute available bandwidth", err, "segment_id", req.ID)
+		return serrors.WrapStr("cannot compute reservation admission", err, "request_id", req.ID)
 	}
-	ideal, err := a.idealBW(ctx, x, req)
+	ideal, err := a.idealBW(ctx, x, req, pad)
 	if err != nil {
-		return serrors.WrapStr("cannot compute ideal bandwidth", err, "segment_id", req.ID)
+		return serrors.WrapStr("cannot compute reservation admission", err, "request_id", req.ID)
 	}
 	maxAlloc := reservation.BWClsFromBW(minBW(avail, ideal))
 	bead := reservation.AllocationBead{
@@ -54,11 +55,51 @@ func (a *StatefulAdmission) AdmitRsv(ctx context.Context, x backend.ColibriStora
 		MaxBW:   maxAlloc,
 	}
 	req.AllocTrail = append(req.AllocTrail, bead)
+
+	// update the scratch pad's source alloc with bead.AllocBW iff there is no resv. in
+	// the DB with the same ID and higher blocked BW. Use the higher BW otherwise
+	pad.SrcAlloc, err = a.updateSrcAllocWithAdmittedRequest(ctx, x, *req, bead.AllocBW.ToKbps())
+	if err != nil {
+		return serrors.WrapStr("cannot compute reservation admission", err, "request_id", req.ID)
+	}
+
+	// and fail the admission if the minimum requested was higher
 	if maxAlloc < req.MinBW {
 		return serrors.New("admission denied", "maxalloc", maxAlloc, "minbw", req.MinBW,
 			"segment_id", req.ID)
 	}
+
+	// update stateful tables with the scratchpad
+	if err = x.PersistTransitDem(ctx, req.Ingress, req.Egress, pad.TransitDem); err != nil {
+		return serrors.WrapStr("cannot persist transit demand", err)
+	}
+	if err = x.PersistTransitAlloc(ctx, req.Ingress, req.Egress, pad.TransitAlloc); err != nil {
+		return serrors.WrapStr("cannot persist transit alloc", err)
+	}
+	if err = x.PersistSourceState(ctx, req.ID.ASID, req.Ingress, req.Egress,
+		pad.SrcDem, pad.SrcAlloc); err != nil {
+		return serrors.WrapStr("cannot persist source state", err)
+	}
+	if err = x.PersistInDemand(ctx, req.ID.ASID, req.Ingress, pad.InDemand); err != nil {
+		return serrors.WrapStr("cannot persist ingress demand", err)
+	}
+	if err = x.PersistEgDemand(ctx, req.ID.ASID, req.Egress, pad.EgDemand); err != nil {
+		return serrors.WrapStr("cannot persist egress demand", err)
+	}
 	return nil
+}
+
+// ScratchPad stores the intermediate calculations that will be stored in
+// the state tables in the DB (e.g. transit demand).
+// Since reproducing these calculations in the DB is pointless, the DB expects calls
+// to persist these stateful values individually.
+type ScratchPad struct {
+	TransitDem   uint64
+	TransitAlloc uint64
+	SrcDem       uint64
+	SrcAlloc     uint64 // only known at the end of the admission
+	InDemand     uint64
+	EgDemand     uint64
 }
 
 func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriStorage,
@@ -93,13 +134,13 @@ func (a *StatefulAdmission) availableBW(ctx context.Context, x backend.ColibriSt
 }
 
 func (a *StatefulAdmission) idealBW(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq) (uint64, error) {
+	req *segment.SetupReq, pad *ScratchPad) (uint64, error) {
 
-	tubeRatio, err := a.tubeRatio(ctx, x, req)
+	tubeRatio, err := a.tubeRatio(ctx, x, req, pad)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute tube ratio", err)
 	}
-	linkRatio, err := a.linkRatio(ctx, x, req)
+	linkRatio, err := a.linkRatio(ctx, x, req, pad)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute link ratio", err)
 	}
@@ -108,12 +149,13 @@ func (a *StatefulAdmission) idealBW(ctx context.Context, x backend.ColibriStorag
 }
 
 func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq) (float64, error) {
+	req *segment.SetupReq, pad *ScratchPad) (float64, error) {
 
-	transitDemand, err := a.transitDemand(ctx, x, req.Ingress, *req)
+	transitDemand, err := a.transitDemand(ctx, x, req.Ingress, *req, pad)
 	if err != nil {
 		return 0, serrors.WrapStr("cannot compute transit demand", err)
 	}
+	pad.TransitDem = transitDemand
 	capIn := a.Capacities.CapacityIngress(req.Ingress)
 	numerator := minBW(capIn, transitDemand)
 	sumTransits := numerator
@@ -121,7 +163,7 @@ func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStor
 		if in == req.Ingress {
 			continue
 		}
-		transitDem, err := a.transitDemand(ctx, x, in, *req)
+		transitDem, err := a.transitDemand(ctx, x, in, *req, pad)
 		if err != nil {
 			return 0, serrors.WrapStr("computing tube ratio failed", err)
 		}
@@ -136,7 +178,7 @@ func (a *StatefulAdmission) tubeRatio(ctx context.Context, x backend.ColibriStor
 // and then adjusting it by substracting the stored egScalFctr x srcAlloc and adding
 // the computed egScalFctr x srcAlloc
 func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStorage,
-	req *segment.SetupReq) (float64, error) {
+	req *segment.SetupReq, pad *ScratchPad) (float64, error) {
 
 	var denominator uint64
 	// stored sum:
@@ -159,7 +201,7 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 	denominator -= uint64(storedEgScalFctr * float64(storedSrcAlloc))
 
 	// adjust by adding the computed egScalFctr and srcAlloc
-	egScalFctr, err := a.egScalFctr(ctx, x, req.ID.ASID, req.Egress, *req)
+	egScalFctr, err := a.egScalFctr(ctx, x, req.ID.ASID, req.Egress, *req, pad)
 	if err != nil {
 		return 0, serrors.WrapStr("computing link ratio failed", err)
 	}
@@ -174,7 +216,9 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 		// the ID of the request
 		srcAlloc -= rsv.MaxBlockedBW()
 	}
+	// don't update pad.SrcAlloc as we don't know yet what will be the final allocated BW for req.
 	denominator += uint64(egScalFctr * float64(srcAlloc))
+	pad.TransitAlloc = denominator
 
 	numerator := egScalFctr * float64(prevBW)
 
@@ -187,13 +231,13 @@ func (a *StatefulAdmission) linkRatio(ctx context.Context, x backend.ColibriStor
 // by adding the difference between the computed adjusted source demand `adjSrcDem` using
 // the request `req` and the one not using the request but only the reservations in the DB.
 func (a *StatefulAdmission) transitDemand(ctx context.Context, x backend.ColibriStorage,
-	ingress uint16, req segment.SetupReq) (uint64, error) {
+	ingress uint16, req segment.SetupReq, pad *ScratchPad) (uint64, error) {
 
 	transit, err := x.GetTransitDem(ctx, ingress, req.Egress)
 	if err != nil {
 		return 0, serrors.WrapStr("computing transit failed", err)
 	}
-	adjSrcDemDiff, err := a.adjSrcDemDifference(ctx, x, ingress, req)
+	adjSrcDemDiff, err := a.adjSrcDemDifference(ctx, x, ingress, req, pad)
 	if err != nil {
 		return 0, serrors.WrapStr("computing transit failed", err)
 	}
@@ -203,7 +247,7 @@ func (a *StatefulAdmission) transitDemand(ctx context.Context, x backend.Colibri
 // adjSrcDemDifference returns the difference between the stored adjSrcDem in DB and the
 // computed one (temporal) using the request.
 func (a *StatefulAdmission) adjSrcDemDifference(ctx context.Context, x backend.ColibriStorage,
-	ingress uint16, req segment.SetupReq) (int64, error) {
+	ingress uint16, req segment.SetupReq, pad *ScratchPad) (int64, error) {
 
 	// stored:
 	storedSrcDem, _, err := x.GetSourceState(ctx, req.ID.ASID, ingress, req.Egress)
@@ -230,15 +274,18 @@ func (a *StatefulAdmission) adjSrcDemDifference(ctx context.Context, x backend.C
 	}
 	var computedSrcDem uint64
 	if srcDem > 0 {
-		inScalFctr, err := a.inScalFctr(ctx, x, req.ID.ASID, ingress, req)
+		inScalFctr, err := a.inScalFctr(ctx, x, req.ID.ASID, ingress, req, pad)
 		if err != nil {
 			return 0, err
 		}
-		egScalFctr, err := a.egScalFctr(ctx, x, req.ID.ASID, req.Egress, req)
+		egScalFctr, err := a.egScalFctr(ctx, x, req.ID.ASID, req.Egress, req, pad)
 		if err != nil {
 			return 0, err
 		}
 		computedSrcDem = uint64(math.Min(inScalFctr, egScalFctr) * float64(srcDem))
+	}
+	if ingress == req.Ingress {
+		pad.SrcDem = computedSrcDem // update srcDem for the request's interface pair
 	}
 	return int64(computedSrcDem - storedSrcDem), nil
 }
@@ -287,7 +334,7 @@ func (a *StatefulAdmission) computeEgScalFctr(egress uint16, egDem uint64) float
 }
 
 func (a *StatefulAdmission) inScalFctr(ctx context.Context, x backend.ColibriStorage,
-	source addr.AS, ingress uint16, req segment.SetupReq) (float64, error) {
+	source addr.AS, ingress uint16, req segment.SetupReq, pad *ScratchPad) (float64, error) {
 
 	dem, err := x.GetInDemand(ctx, source, ingress)
 	if err != nil {
@@ -305,12 +352,13 @@ func (a *StatefulAdmission) inScalFctr(ctx context.Context, x backend.ColibriSto
 		return 0, serrors.WrapStr("computing in scale factor failed", err)
 	}
 	dem += srcDem
+	pad.InDemand = dem
 
 	return a.computeInScalFctr(ingress, dem), nil
 }
 
 func (a *StatefulAdmission) egScalFctr(ctx context.Context, x backend.ColibriStorage,
-	source addr.AS, egress uint16, req segment.SetupReq) (float64, error) {
+	source addr.AS, egress uint16, req segment.SetupReq, pad *ScratchPad) (float64, error) {
 
 	dem, err := x.GetEgDemand(ctx, source, egress)
 	if err != nil {
@@ -328,8 +376,42 @@ func (a *StatefulAdmission) egScalFctr(ctx context.Context, x backend.ColibriSto
 		return 0, serrors.WrapStr("computing eg scale factor failed", err)
 	}
 	dem += srcDem
+	pad.EgDemand = dem
 
 	return a.computeEgScalFctr(egress, dem), nil
+}
+
+// updateSrcAllocWithAdmittedRequest returns the new srcAlloc using the allocated bandwidth for
+// the request, or the max blocked bandwidth from a reservation with the same ID, if greater.
+func (a *StatefulAdmission) updateSrcAllocWithAdmittedRequest(ctx context.Context,
+	x backend.ColibriStorage, req segment.SetupReq, allocBW uint64) (uint64, error) {
+
+	// previous src alloc:
+	_, srcAlloc, err := x.GetSourceState(ctx, req.ID.ASID, req.Ingress, req.Egress)
+	if err != nil {
+		return 0, serrors.WrapStr("computing updated src alloc", err)
+	}
+
+	// any reservation with the same ID?
+	rsv, err := x.GetSegmentRsvFromID(ctx, &req.ID)
+	if err != nil {
+		return 0, serrors.WrapStr("computing link ratio failed", err)
+	}
+
+	var oldBlocked uint64
+	newToBlock := allocBW
+
+	if rsv != nil && rsv.Ingress == req.Ingress && rsv.Egress == req.Egress {
+		blocked := rsv.MaxBlockedBW()
+		if blocked < allocBW {
+			oldBlocked = blocked // from existing reservation with same ID
+		} else {
+			newToBlock = 0
+		}
+	}
+	// remove old one, add new one
+	srcAlloc += (newToBlock - oldBlocked)
+	return srcAlloc, nil
 }
 
 // sumMaxBlockedBW adds up all the max blocked bandwidth by the reservation, for all reservations,
