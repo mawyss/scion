@@ -420,6 +420,19 @@ func (x *executor) PersistTransitDem(ctx context.Context, ingress, egress uint16
 	return nil
 }
 
+func (x *executor) GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error) {
+	query := `SELECT traffic_alloc FROM state_transit_alloc
+	WHERE ingress = ? AND egress = ?`
+	var sum uint64
+	if err := x.db.QueryRowContext(ctx, query, ingress, egress).Scan(&sum); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, serrors.WrapStr("get link ratio total sum failed", err)
+	}
+	return sum, nil
+}
+
 func (x *executor) GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (
 	uint64, uint64, error) {
 
@@ -483,19 +496,6 @@ func (x *executor) GetEgDemand(ctx context.Context, source addr.AS, egress uint1
 		return 0, serrors.WrapStr("get eg demand failed", err)
 	}
 	return demand, nil
-}
-
-func (x *executor) GetTransitAlloc(ctx context.Context, ingress, egress uint16) (uint64, error) {
-	query := `SELECT traffic_alloc FROM state_transit_alloc
-	WHERE ingress = ? AND egress = ?`
-	var sum uint64
-	if err := x.db.QueryRowContext(ctx, query, ingress, egress).Scan(&sum); err != nil {
-		if err == sql.ErrNoRows {
-			return 0, nil
-		}
-		return 0, serrors.WrapStr("get link ratio total sum failed", err)
-	}
-	return sum, nil
 }
 
 func (x *executor) DebugCountSegmentRsvs(ctx context.Context) (int, error) {

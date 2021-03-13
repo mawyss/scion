@@ -86,7 +86,7 @@ const (
 		PRIMARY KEY(ifid)
 	);
 
-	-- state_transit_demand keeps the current transit demand between interface pairs
+	-- state_transit_demand keeps the current transit demand between interface pairs.
 	CREATE TABLE state_transit_demand (
 		ingress INTEGER NOT NULL,
 		egress  INTEGER NOT NULL,
@@ -94,7 +94,17 @@ const (
 		PRIMARY KEY(ingress,egress)
 	);
 
-	-- state_source_ingress_egress stores 
+	-- stores the sum of egScalFctr x srcAlloc for all sources, between interface pairs.
+	-- It is essentially the denominator of the link ratio formula.
+	CREATE TABLE state_transit_alloc (
+		ingress INTEGER NOT NULL,
+		egress INTEGER NOT NULL,
+		traffic_alloc INTEGER NOT NULL,
+		PRIMARY KEY(ingress,egress)
+	);
+
+	-- state_source_ingress_egress stores the source demands and allocations for a given
+	-- source, and ingress and egress interfaces.
 	CREATE TABLE state_source_ingress_egress (
 		source INTEGER NOT NULL,
 		ingress INTEGER NOT NULL,
@@ -104,7 +114,7 @@ const (
 		PRIMARY KEY(source,ingress,egress)
 	);
 
-	-- stores inDemand
+	-- stores inDemand for a given source and ingress interface.
 	CREATE TABLE state_source_ingress (
 		source INTEGER NOT NULL,
 		ingress INTEGER NOT NULL,
@@ -112,7 +122,7 @@ const (
 		PRIMARY KEY(source,ingress)
 	);
 
-	-- stores egDemand
+	-- stores egDemand for a given source and egress interface.
 	CREATE TABLE state_source_egress (
 		source INTEGER NOT NULL,
 		egress INTEGER NOT NULL,
@@ -120,14 +130,6 @@ const (
 		PRIMARY KEY(source,egress)
 	);
 
-	-- stores the sum of egScalFctr x srcAlloc for all sources, parametrized on ingress and egress.
-	-- It is essentially the denominator of the link ratio formula.
-	CREATE TABLE state_transit_alloc (
-		ingress INTEGER NOT NULL,
-		egress INTEGER NOT NULL,
-		traffic_alloc INTEGER NOT NULL,
-		PRIMARY KEY(ingress,egress)
-	);
 
 	CREATE INDEX "index_seg_reservation" ON "seg_reservation" (
 		"id_as",
