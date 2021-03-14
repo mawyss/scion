@@ -53,6 +53,7 @@ func TestDB(t *testing.T, db TestableDB) {
 		"get e2e reservation from ID":            testGetE2ERsvFromID,
 		"get e2e reservations from segment ones": testGetE2ERsvsOnSegRsv,
 		"state interface blocked":                testGetInterfaceUsage,
+		"stateful tables":                        testStatefulTables,
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -686,6 +687,83 @@ func testGetInterfaceUsage(ctx context.Context, t *testing.T, db backend.DB) {
 	testInterfaceUseIngress(ctx, t, db, 0, toKbps(9))
 	testInterfaceUseEgress(ctx, t, db, 1, 0)
 	testInterfaceUseEgress(ctx, t, db, 2, toKbps(9))
+}
+
+func testStatefulTables(ctx context.Context, t *testing.T, db backend.DB) {
+	rsv := newTestReservation(t)
+	// empty interface usage tables
+	bw, err := db.GetInterfaceUsageIngress(ctx, rsv.Ingress)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	bw, err = db.GetInterfaceUsageEgress(ctx, rsv.Egress)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	// insert a reservation
+	err = db.PersistSegmentRsv(ctx, rsv)
+	require.NoError(t, err)
+	bw, err = db.GetInterfaceUsageIngress(ctx, rsv.Ingress)
+	require.NoError(t, err)
+	require.Equal(t, rsv.MaxBlockedBW(), bw)
+	bw, err = db.GetInterfaceUsageEgress(ctx, rsv.Egress)
+	require.NoError(t, err)
+	require.Equal(t, rsv.MaxBlockedBW(), bw)
+	// cleanup everything, leave empty tables again
+	err = db.DeleteSegmentRsv(ctx, &rsv.ID)
+	require.NoError(t, err)
+	bw, err = db.GetInterfaceUsageIngress(ctx, rsv.Ingress)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	bw, err = db.GetInterfaceUsageEgress(ctx, rsv.Egress)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	// empty tables again
+	bw, err = db.GetTransitDem(ctx, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	bw, err = db.GetTransitAlloc(ctx, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	bw, bw2, err := db.GetSourceState(ctx, rsv.ID.ASID, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	require.Equal(t, uint64(0), bw2)
+	bw, err = db.GetInDemand(ctx, rsv.ID.ASID, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	bw, err = db.GetEgDemand(ctx, rsv.ID.ASID, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), bw)
+	// persist transit dem
+	err = db.PersistTransitDem(ctx, 1, 2, 42)
+	require.NoError(t, err)
+	bw, err = db.GetTransitDem(ctx, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(42), bw)
+	// persist transit alloc
+	err = db.PersistTransitAlloc(ctx, 1, 2, 43)
+	require.NoError(t, err)
+	bw, err = db.GetTransitAlloc(ctx, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(43), bw)
+	// persist source state
+	err = db.PersistSourceState(ctx, rsv.ID.ASID, 1, 2, 44, 45)
+	require.NoError(t, err)
+	bw, bw2, err = db.GetSourceState(ctx, rsv.ID.ASID, 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(44), bw)
+	require.Equal(t, uint64(45), bw2)
+	// persist in demand
+	err = db.PersistInDemand(ctx, rsv.ID.ASID, 1, 46)
+	require.NoError(t, err)
+	bw, err = db.GetInDemand(ctx, rsv.ID.ASID, 1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(46), bw)
+	// persist eg demand
+	err = db.PersistEgDemand(ctx, rsv.ID.ASID, 2, 47)
+	require.NoError(t, err)
+	bw, err = db.GetEgDemand(ctx, rsv.ID.ASID, 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(47), bw)
 }
 
 // newToken just returns a token that can be serialized. This one has two HopFields.

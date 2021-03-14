@@ -453,7 +453,7 @@ func (x *executor) PersistTransitAlloc(ctx context.Context, ingress, egress uint
 func (x *executor) GetSourceState(ctx context.Context, source addr.AS, ingress, egress uint16) (
 	uint64, uint64, error) {
 
-	query := `SELECT src_demand src_alloc FROM state_source_ingress_egress
+	query := `SELECT src_demand,src_alloc FROM state_source_ingress_egress
 	WHERE source = ? AND ingress = ? AND egress = ?`
 	var srcDem, srcAlloc uint64
 	if err := x.db.QueryRowContext(ctx, query, source, ingress, egress).Scan(
@@ -520,8 +520,8 @@ func (x *executor) PersistInDemand(ctx context.Context, source addr.AS, ingress 
 func (x *executor) GetEgDemand(ctx context.Context, source addr.AS, egress uint16) (
 	uint64, error) {
 
-	query := `SELECT demand FROM state_source_ingress
-		WHERE source = ? AND ingress = ?`
+	query := `SELECT demand FROM state_source_egress
+		WHERE source = ? AND egress = ?`
 	var demand uint64
 	if err := x.db.QueryRowContext(ctx, query, source, egress).Scan(&demand); err != nil {
 		if err == sql.ErrNoRows {
