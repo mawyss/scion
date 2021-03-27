@@ -51,6 +51,7 @@ import (
 	"github.com/scionproto/scion/go/lib/util"
 	"github.com/scionproto/scion/go/pkg/router/bfd"
 	"github.com/scionproto/scion/go/pkg/router/control"
+	"github.com/scionproto/scion/go/pkg/router/te"
 )
 
 const (
@@ -560,6 +561,7 @@ type processResult struct {
 	OutConn  BatchConn
 	OutAddr  net.Addr
 	OutPkt   []byte
+	Class    te.TrafficClass
 }
 
 func (d *DataPlane) processPkt(ingressID uint16, rawPkt []byte, srcAddr net.Addr, s slayers.SCION,
