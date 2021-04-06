@@ -104,6 +104,8 @@ type DataPlane struct {
 	running           bool
 	Metrics           *Metrics
 	forwardingMetrics map[uint16]forwardingMetrics
+	TE                bool
+	queueMap          map[BatchConn]*te.Queues
 }
 
 var (
@@ -189,6 +191,13 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	}
 	d.internal = conn
 	d.internalIP = ip
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues()
+	}
 	return nil
 }
 
@@ -211,6 +220,13 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 		d.external = make(map[uint16]BatchConn)
 	}
 	d.external[ifID] = conn
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues()
+	}
 	return nil
 }
 
@@ -280,6 +296,14 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 				With(labels...),
 		}
 	}
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues()
+	}
+
 	s := &bfdSend{
 		conn:    conn,
 		srcAddr: src.Addr,
@@ -288,6 +312,7 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 		dstIA:   dst.IA,
 		ifID:    ifID,
 		mac:     d.macFactory(),
+		d:       d,
 	}
 	return d.addBFDController(ifID, s, cfg, m)
 }
@@ -429,6 +454,7 @@ func (d *DataPlane) AddNextHopBFD(ifID uint16, src, dst *net.UDPAddr, cfg contro
 		dstIA:   d.localIA,
 		ifID:    0,
 		mac:     d.macFactory(),
+		d:       d,
 	}
 	return d.addBFDController(ifID, s, cfg, m)
 }
@@ -442,6 +468,32 @@ func (d *DataPlane) Run() error {
 	d.initMetrics()
 
 	read := func(ingressID uint16, rd BatchConn) {
+		// Start scheduling
+
+		if d.TE {
+			go func(rd BatchConn) {
+				defer log.HandlePanic()
+				myQueues, ok := d.queueMap[rd]
+				if !ok {
+					panic("Error getting queues for scheduling")
+				}
+
+				for d.running {
+					myQueues.WaitUntilNonempty()
+					ms, err := myQueues.Schedule(te.SchedOthersOnly)
+					if err != nil {
+						log.Debug("Error scheduling packet", "err", err)
+					}
+
+					if len(ms) > 0 {
+						_, err = rd.WriteBatch(ms)
+						if err != nil {
+							log.Debug("Error writing packet", "err", err)
+						}
+					}
+				}
+			}(rd)
+		}
 
 		msgs := conn.NewReadMessages(inputBatchCnt)
 		for _, msg := range msgs {
@@ -494,19 +546,43 @@ func (d *DataPlane) Run() error {
 				if result.OutConn == nil { // e.g. BFD case no message is forwarded
 					continue
 				}
-				_, err = result.OutConn.WriteBatch(underlayconn.Messages([]ipv4.Message{{
-					Buffers: [][]byte{result.OutPkt},
-					Addr:    result.OutAddr,
-				}}))
-				if err != nil {
-					log.Debug("Error writing packet", "err", err)
-					// error metric
-					continue
+
+				if d.TE {
+					otherConnectionQueues, ok := d.queueMap[result.OutConn]
+					if !ok {
+						log.Debug("Error finding queues for scheduling")
+						continue
+					}
+
+					// Create new message. Important: need to allocate new buffer, because
+					// result.OutPkt will be reused...
+					message := ipv4.Message{}
+					message.Buffers = make([][]byte, 1)
+					message.Buffers[0] = make([]byte, len(result.OutPkt))
+					copy(message.Buffers[0], result.OutPkt)
+					message.Addr = result.OutAddr
+
+					err := otherConnectionQueues.Enqueue(result.Class, message)
+					if err != nil {
+						log.Debug("Enqueue failed", "err", err)
+						continue
+					}
+				} else {
+					_, err = result.OutConn.WriteBatch(underlayconn.Messages([]ipv4.Message{{
+						Buffers: [][]byte{result.OutPkt},
+						Addr:    result.OutAddr,
+					}}))
+					if err != nil {
+						log.Debug("Error writing packet", "err", err)
+						// error metric
+						continue
+					}
+
+					// ok metric
+					outputCounters := d.forwardingMetrics[result.EgressID]
+					outputCounters.OutputPacketsTotal.Inc()
+					outputCounters.OutputBytesTotal.Add(float64(len(result.OutPkt)))
 				}
-				// ok metric
-				outputCounters := d.forwardingMetrics[result.EgressID]
-				outputCounters.OutputPacketsTotal.Inc()
-				outputCounters.OutputBytesTotal.Add(float64(len(result.OutPkt)))
 			}
 
 			// Reset buffers to original capacity.
@@ -1344,6 +1420,7 @@ type bfdSend struct {
 	srcIA, dstIA     addr.IA
 	mac              hash.Hash
 	ifID             uint16
+	d                *DataPlane
 }
 
 func (b *bfdSend) String() string {
@@ -1403,8 +1480,22 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 	copy(msg.Buffers[0], raw)
 	msg.N = len(raw)
 	msg.Addr = b.dstAddr
-	_, err = b.conn.WriteBatch(underlayconn.Messages{msg})
-	return err
+
+	d := b.d
+	if d.TE {
+		myQueue, ok := d.queueMap[b.conn]
+		if !ok {
+			return serrors.New("Error finding queues for scheduling")
+		}
+		err = myQueue.Enqueue(te.ClsOthers, msg)
+		if err != nil {
+			return serrors.New("Enqueue failed", "err", err)
+		}
+		return nil
+	} else {
+		_, err = b.conn.WriteBatch(underlayconn.Messages{msg})
+		return err
+	}
 }
 
 type pathUpdater interface {

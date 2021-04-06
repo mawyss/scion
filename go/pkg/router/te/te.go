@@ -17,73 +17,135 @@
 package te
 
 import (
+	"golang.org/x/net/ipv4"
+
 	"github.com/scionproto/scion/go/lib/serrors"
 )
 
 type TrafficClass int
+type Scheduler int
 
+// Identify the possible traffic classes. The class "ClsOthers" must be zero.
 const (
-	ClsOthers  TrafficClass = iota
+	ClsOthers TrafficClass = iota
 	ClsColibri
 	ClsEpic
 	ClsScmp
 	ClsScion
 )
 
+const (
+	SchedOthersOnly Scheduler = iota
+	SchedRoundRobin
+	SchedColibriPrio
+)
+
+// queueBufferSize denotes the buffer size of a queue
 const queueBufferSize = 64
 
+// maxSchedSize denotes the maximum amount of packets that are scheduled in one round.
+const maxSchedSize = 4
+
 type Queues struct {
-	mapping map[TrafficClass] chan []byte
+	mapping  map[TrafficClass]chan ipv4.Message
+	nonempty chan bool
 }
 
 func NewQueues() *Queues {
 	qs := &Queues{}
-	qs.mapping = make(map[TrafficClass] chan []byte)
+	qs.nonempty = make(chan bool, 1)
+	qs.mapping = make(map[TrafficClass]chan ipv4.Message)
 
-	qs.mapping[ClsOthers] = make(chan []byte, queueBufferSize)
-	qs.mapping[ClsColibri] = make(chan []byte, queueBufferSize)
-	qs.mapping[ClsEpic] = make(chan []byte, queueBufferSize)
-	qs.mapping[ClsScmp] = make(chan []byte, queueBufferSize)
-	qs.mapping[ClsScion] = make(chan []byte, queueBufferSize)
+	qs.mapping[ClsOthers] = make(chan ipv4.Message, queueBufferSize)
+	qs.mapping[ClsColibri] = make(chan ipv4.Message, queueBufferSize)
+	qs.mapping[ClsEpic] = make(chan ipv4.Message, queueBufferSize)
+	qs.mapping[ClsScmp] = make(chan ipv4.Message, queueBufferSize)
+	qs.mapping[ClsScion] = make(chan ipv4.Message, queueBufferSize)
 	return qs
 }
 
-func (qs *Queues) Enqueue(tc TrafficClass, op []byte) error {
+func (qs *Queues) Enqueue(tc TrafficClass, m ipv4.Message) error {
 	q, ok := qs.mapping[tc]
 	if !ok {
 		return serrors.New("unknown traffic class")
 	}
 
 	select {
-	case q <- op:
+	case q <- m:
+		qs.setToNonempty()
 		return nil
 	default:
 		return serrors.New("queue full", "traffic class", tc)
 	}
 }
 
-func (qs *Queues) Dequeue(tc TrafficClass, batchSize int, ops [][]byte) (int, error) {
+func (qs *Queues) setToNonempty() {
+	select {
+	case qs.nonempty <- true:
+
+	default:
+	}
+}
+
+func (qs *Queues) WaitUntilNonempty() {
+	select {
+	case <-qs.nonempty:
+	}
+}
+
+func (qs *Queues) dequeue(tc TrafficClass, batchSize int, ms []ipv4.Message) (int, error) {
 	q, ok := qs.mapping[tc]
 	if !ok {
 		return 0, serrors.New("unknown traffic class")
 	}
 
 	var counter int
+L:
 	for counter = 0; counter < batchSize; counter++ {
 		select {
-		case op := <- q:
-			ops[counter] = op
+		case m := <-q:
+			//log.Debug("Deque some packet", "message", m)
+			ms[counter] = m
 		default:
-			break
+			//log.Debug("No packet to dequeue")
+			break L
 		}
 	}
-	// reset using ops = ops[:0]
+	//log.Debug("Dequeued n packets", "traffic class", tc, "n", counter)
+	// reset using ms = ms[:0]
 	return counter, nil
 }
 
-func (qs *Queues) Schedule() {
+func (qs *Queues) Schedule(s Scheduler) ([]ipv4.Message, error) {
+	switch s {
+	case SchedRoundRobin:
+		return qs.scheduleRoundRobin()
+	case SchedColibriPrio:
+		return qs.scheduleColibriPrio()
+	case SchedOthersOnly:
+		return qs.scheduleOthersOnly()
+	default:
+		return qs.scheduleRoundRobin()
+	}
+}
+
+func (qs *Queues) scheduleOthersOnly() ([]ipv4.Message, error) {
+	messageBuffer := make([]ipv4.Message, maxSchedSize)
+	n, err := qs.dequeue(ClsOthers, maxSchedSize, messageBuffer)
+	if err != nil {
+		return nil, err
+	}
+	return messageBuffer[:n], nil
+}
+
+func (qs *Queues) scheduleRoundRobin() ([]ipv4.Message, error) {
+	return nil, nil
+}
+
+func (qs *Queues) scheduleColibriPrio() ([]ipv4.Message, error) {
 	// Strict priority: Colibri
 
 	// Remaining classes are scheduled if Colibri queue is empty
-	
+
+	return nil, nil
 }
