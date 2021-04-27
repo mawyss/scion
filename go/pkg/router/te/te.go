@@ -1,5 +1,4 @@
-// Copyright 2016 ETH Zurich
-// Copyright 2019 ETH Zurich, Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +13,7 @@
 // limitations under the License.
 
 // Package te adds traffic engineering capabilities to the border router.
+// Traffic engineering can be enabled/disabled in 'scion/go/posix-router/main.go'.
 package te
 
 import (
@@ -25,45 +25,55 @@ import (
 type TrafficClass int
 type Scheduler int
 
-// Identify the possible traffic classes. The class "ClsOthers" must be zero.
+// Identify the possible traffic classes. The class "ClsOthers" must be zero. Packets where the
+// traffic class is not set will be assigned to this class by default. Every class must be
+// registered inside the 'NewQueues()' function.
 const (
 	ClsOthers TrafficClass = iota
 	ClsColibri
 	ClsEpic
+	ClsBfd
 	ClsScmp
 	ClsScion
 )
 
+// Identify the possible scheduling algorithms.
 const (
 	SchedOthersOnly Scheduler = iota
 	SchedRoundRobin
 	SchedColibriPrio
+	SchedStrictPriority
 )
 
-// queueBufferSize denotes the buffer size of a queue
-const queueBufferSize = 64
+// queueSize denotes the buffer size of a queue, i.e., the maximum number of packets that a queue
+// can store.
+const queueSize = 64
 
-// maxSchedSize denotes the maximum amount of packets that are scheduled in one round.
-const maxSchedSize = 4
-
+// Queues describes the queues (one for each traffic class) for a certain router interface.
+// The 'mapping' translates traffic classes to their respective queue. The 'nonempty' channel is
+// used to signal to the scheduler that packets are ready, which is necessary to omit
+// computationally expensive spinning over the queues.
 type Queues struct {
 	mapping  map[TrafficClass]chan ipv4.Message
 	nonempty chan bool
 }
 
+// NewQueues creates new queues.
 func NewQueues() *Queues {
 	qs := &Queues{}
 	qs.nonempty = make(chan bool, 1)
 	qs.mapping = make(map[TrafficClass]chan ipv4.Message)
 
-	qs.mapping[ClsOthers] = make(chan ipv4.Message, queueBufferSize)
-	qs.mapping[ClsColibri] = make(chan ipv4.Message, queueBufferSize)
-	qs.mapping[ClsEpic] = make(chan ipv4.Message, queueBufferSize)
-	qs.mapping[ClsScmp] = make(chan ipv4.Message, queueBufferSize)
-	qs.mapping[ClsScion] = make(chan ipv4.Message, queueBufferSize)
+	qs.mapping[ClsOthers] = make(chan ipv4.Message, queueSize)
+	qs.mapping[ClsColibri] = make(chan ipv4.Message, queueSize)
+	qs.mapping[ClsEpic] = make(chan ipv4.Message, queueSize)
+	qs.mapping[ClsBfd] = make(chan ipv4.Message, queueSize)
+	qs.mapping[ClsScmp] = make(chan ipv4.Message, queueSize)
+	qs.mapping[ClsScion] = make(chan ipv4.Message, queueSize)
 	return qs
 }
 
+// Enqueue adds the message 'm' to the queue corresponding to traffic class 'tc'.
 func (qs *Queues) Enqueue(tc TrafficClass, m ipv4.Message) error {
 	q, ok := qs.mapping[tc]
 	if !ok {
@@ -79,6 +89,7 @@ func (qs *Queues) Enqueue(tc TrafficClass, m ipv4.Message) error {
 	}
 }
 
+// setToNonempty signals to the scheduler that new messages are ready to be scheduled.
 func (qs *Queues) setToNonempty() {
 	select {
 	case qs.nonempty <- true:
@@ -87,12 +98,15 @@ func (qs *Queues) setToNonempty() {
 	}
 }
 
+// WaitUntilNonempty blocks until new messages are ready to be scheduled.
 func (qs *Queues) WaitUntilNonempty() {
 	select {
 	case <-qs.nonempty:
 	}
 }
 
+// dequeue reads up to 'batchSize' number of messages from the queue corresponding to the traffic
+// class 'tc' and stores them in the message buffer 'ms'.
 func (qs *Queues) dequeue(tc TrafficClass, batchSize int, ms []ipv4.Message) (int, error) {
 	q, ok := qs.mapping[tc]
 	if !ok {
@@ -104,18 +118,16 @@ L:
 	for counter = 0; counter < batchSize; counter++ {
 		select {
 		case m := <-q:
-			//log.Debug("Deque some packet", "message", m)
 			ms[counter] = m
 		default:
-			//log.Debug("No packet to dequeue")
 			break L
 		}
 	}
-	//log.Debug("Dequeued n packets", "traffic class", tc, "n", counter)
-	// reset using ms = ms[:0]
 	return counter, nil
 }
 
+// Schedule dequeues messages from the queues and prioritizes them according the the specified
+// Scheduler. It returns the messages that will be forwarded.
 func (qs *Queues) Schedule(s Scheduler) ([]ipv4.Message, error) {
 	switch s {
 	case SchedRoundRobin:
@@ -124,28 +136,128 @@ func (qs *Queues) Schedule(s Scheduler) ([]ipv4.Message, error) {
 		return qs.scheduleColibriPrio()
 	case SchedOthersOnly:
 		return qs.scheduleOthersOnly()
+	case SchedStrictPriority:
+		return qs.scheduleStrictPriority()
 	default:
 		return qs.scheduleRoundRobin()
 	}
 }
 
+// scheduleOthersOnly only forwards packets from the 'Others' queue, all other queues are ignored.
 func (qs *Queues) scheduleOthersOnly() ([]ipv4.Message, error) {
+	maxSchedSize := 8
 	messageBuffer := make([]ipv4.Message, maxSchedSize)
-	n, err := qs.dequeue(ClsOthers, maxSchedSize, messageBuffer)
+
+	read, err := qs.dequeue(ClsOthers, maxSchedSize, messageBuffer)
 	if err != nil {
 		return nil, err
 	}
-	return messageBuffer[:n], nil
+
+	if read > 0 {
+		qs.setToNonempty()
+	}
+
+	return messageBuffer[:read], nil
 }
 
+// scheduleStrictPriority schedules packets based on a strict hierarchy, where a message from a
+// queue is only scheduled if all higher priority queues are empty.
+// The priorities are: COLIBRI > EPIC > BFD > SCMP > SCION > Others.
+func (qs *Queues) scheduleStrictPriority() ([]ipv4.Message, error) {
+	maxSchedSize := 8
+	messageBuffer := make([]ipv4.Message, maxSchedSize)
+
+	read := 0
+	n, err := qs.dequeue(ClsColibri, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsEpic, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsBfd, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsScmp, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsScion, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsOthers, maxSchedSize-read, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	if read > 0 {
+		qs.setToNonempty()
+	}
+
+	return messageBuffer[:read], nil
+}
+
+// scheduleRoundRobin schedules the packets based on round-robin.
 func (qs *Queues) scheduleRoundRobin() ([]ipv4.Message, error) {
-	return nil, nil
+	messageBuffer := make([]ipv4.Message, len(qs.mapping))
+
+	read := 0
+	for cls := range qs.mapping {
+		n, err := qs.dequeue(cls, 1, messageBuffer[read:])
+		if err != nil {
+			return nil, err
+		}
+		read = read + n
+	}
+
+	if read > 0 {
+		qs.setToNonempty()
+	}
+
+	return messageBuffer[:read], nil
 }
 
+// scheduleColibriPrio gives priority to Colibri packets, but also includes up to one packet of
+// each other traffic class.
 func (qs *Queues) scheduleColibriPrio() ([]ipv4.Message, error) {
-	// Strict priority: Colibri
+	maxSchedSize := 16
+	messageBuffer := make([]ipv4.Message, maxSchedSize)
 
-	// Remaining classes are scheduled if Colibri queue is empty
+	// Prioritize Colibri packets
+	nrQueues := len(qs.mapping)
+	read := 0
+	n, err := qs.dequeue(ClsColibri, maxSchedSize-nrQueues, messageBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
 
-	return nil, nil
+	// Remaining classes are scheduled using round-robin (including one Colibri packet)
+	for cls := range qs.mapping {
+		n, err := qs.dequeue(cls, 1, messageBuffer[read:])
+		if err != nil {
+			return nil, err
+		}
+		read = read + n
+	}
+
+	if read > 0 {
+		qs.setToNonempty()
+	}
+
+	return messageBuffer[:read], nil
 }

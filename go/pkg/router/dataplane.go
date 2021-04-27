@@ -469,7 +469,6 @@ func (d *DataPlane) Run() error {
 
 	read := func(ingressID uint16, rd BatchConn) {
 		// Start scheduling
-
 		if d.TE {
 			go func(rd BatchConn) {
 				defer log.HandlePanic()
@@ -480,7 +479,7 @@ func (d *DataPlane) Run() error {
 
 				for d.running {
 					myQueues.WaitUntilNonempty()
-					ms, err := myQueues.Schedule(te.SchedOthersOnly)
+					ms, err := myQueues.Schedule(te.SchedStrictPriority)
 					if err != nil {
 						log.Debug("Error scheduling packet", "err", err)
 					}
@@ -555,7 +554,7 @@ func (d *DataPlane) Run() error {
 					}
 
 					// Create new message. Important: need to allocate new buffer, because
-					// result.OutPkt will be reused...
+					// result.OutPkt will be reused for new incoming packets.
 					message := ipv4.Message{}
 					message.Buffers = make([][]byte, 1)
 					message.Buffers[0] = make([]byte, len(result.OutPkt))
@@ -806,6 +805,7 @@ func (d *DataPlane) processEPIC(ingressID uint16, rawPkt []byte, s slayers.SCION
 		}
 	}
 
+	result.Class = te.ClsEpic
 	return result, nil
 }
 
@@ -1487,7 +1487,7 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 		if !ok {
 			return serrors.New("Error finding queues for scheduling")
 		}
-		err = myQueue.Enqueue(te.ClsOthers, msg)
+		err = myQueue.Enqueue(te.ClsBfd, msg)
 		if err != nil {
 			return serrors.New("Enqueue failed", "err", err)
 		}
