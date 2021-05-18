@@ -50,6 +50,7 @@ import (
 	"github.com/scionproto/scion/go/lib/util"
 	"github.com/scionproto/scion/go/pkg/router/bfd"
 	"github.com/scionproto/scion/go/pkg/router/control"
+	"github.com/scionproto/scion/go/pkg/router/te"
 )
 
 const (
@@ -76,6 +77,7 @@ type bfdSession interface {
 // BatchConn is a connection that supports batch reads and writes.
 type BatchConn interface {
 	ReadBatch(underlayconn.Messages) (int, error)
+	WriteBatch(underlayconn.Messages) (int, error)
 	WriteTo([]byte, *net.UDPAddr) (int, error)
 	Close() error
 }
@@ -102,6 +104,8 @@ type DataPlane struct {
 	running           bool
 	Metrics           *Metrics
 	forwardingMetrics map[uint16]forwardingMetrics
+	TE                bool
+	queueMap          map[BatchConn]*te.Queues
 }
 
 var (
@@ -187,6 +191,13 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	}
 	d.internal = conn
 	d.internalIP = ip
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(bufSize)
+	}
 	return nil
 }
 
@@ -209,6 +220,13 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 		d.external = make(map[uint16]BatchConn)
 	}
 	d.external[ifID] = conn
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(bufSize)
+	}
 	return nil
 }
 
@@ -278,6 +296,14 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 				With(labels...),
 		}
 	}
+
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(bufSize)
+	}
+
 	s := &bfdSend{
 		conn:    conn,
 		srcAddr: src.Addr,
@@ -286,6 +312,7 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 		dstIA:   dst.IA,
 		ifID:    ifID,
 		mac:     d.macFactory(),
+		d:       d,
 	}
 	return d.addBFDController(ifID, s, cfg, m)
 }
@@ -427,6 +454,7 @@ func (d *DataPlane) AddNextHopBFD(ifID uint16, src, dst *net.UDPAddr, cfg contro
 		dstIA:   d.localIA,
 		ifID:    0,
 		mac:     d.macFactory(),
+		d:       d,
 	}
 	return d.addBFDController(ifID, s, cfg, m)
 }
@@ -444,6 +472,36 @@ func (d *DataPlane) Run() error {
 		msgs := conn.NewReadMessages(inputBatchCnt)
 		for _, msg := range msgs {
 			msg.Buffers[0] = make([]byte, bufSize)
+		}
+
+		// Start scheduling
+		if d.TE {
+			go func(rd BatchConn) {
+				defer log.HandlePanic()
+
+				myQueues, ok := d.queueMap[rd]
+				myQueues.SetScheduler(te.SchedStrictPriority)
+				if !ok {
+					panic("Error getting queues for scheduling")
+				}
+
+				for d.running {
+					myQueues.WaitUntilNonempty()
+					ms, err := myQueues.Schedule()
+					if err != nil {
+						log.Debug("Error scheduling packet", "err", err)
+					}
+
+					if len(ms) > 0 {
+						_, err = rd.WriteBatch(ms)
+
+						if err != nil {
+							log.Debug("Error writing packet", "err", err)
+						}
+						myQueues.ReturnBuffers(ms)
+					}
+				}
+			}(rd)
 		}
 
 		processor := newPacketProcessor(d, ingressID)
@@ -484,11 +542,30 @@ func (d *DataPlane) Run() error {
 				if result.OutConn == nil { // e.g. BFD case no message is forwarded
 					continue
 				}
-				_, err = result.OutConn.WriteTo(result.OutPkt, result.OutAddr)
-				if err != nil {
-					log.Debug("Error writing packet", "err", err)
-					// error metric
-					continue
+
+				if d.TE {
+					otherConnectionQueues, ok := d.queueMap[result.OutConn]
+					if !ok {
+						log.Debug("Error finding queues for scheduling")
+						continue
+					}
+
+					if result.OutAddr == nil {
+						result.OutAddr = &net.UDPAddr{}
+					}
+					err := otherConnectionQueues.Enqueue(result.Class, result.OutPkt, result.OutAddr)
+					
+					if err != nil {
+						log.Debug("Enqueue failed", "err", err)
+						continue
+					}
+				} else {
+					_, err = result.OutConn.WriteTo(result.OutPkt, result.OutAddr)
+					if err != nil {
+						log.Debug("Error writing packet", "err", err)
+						// error metric
+						continue
+					}
 				}
 				// ok metric
 				outputCounters := d.forwardingMetrics[result.EgressID]
@@ -543,6 +620,7 @@ type processResult struct {
 	OutConn  BatchConn
 	OutAddr  *net.UDPAddr
 	OutPkt   []byte
+	Class    te.TrafficClass
 }
 
 func newPacketProcessor(d *DataPlane, ingressID uint16) *scionPacketProcessor {
@@ -708,6 +786,7 @@ func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 		}
 	}
 
+	result.Class = te.ClsEpic
 	return result, nil
 }
 
@@ -1170,7 +1249,8 @@ func (p *scionPacketProcessor) process() (processResult, error) {
 		if err != nil {
 			return r, err
 		}
-		return processResult{OutConn: p.d.internal, OutAddr: a, OutPkt: p.rawPkt}, nil
+		return processResult{OutConn: p.d.internal, OutAddr: a,
+			OutPkt: p.rawPkt, Class: te.ClsScion}, nil
 	}
 
 	// Outbound: pkts leaving the local IA.
@@ -1199,12 +1279,14 @@ func (p *scionPacketProcessor) process() (processResult, error) {
 		if err := p.processEgress(); err != nil {
 			return processResult{}, err
 		}
-		return processResult{EgressID: egressID, OutConn: c, OutPkt: p.rawPkt}, nil
+		return processResult{EgressID: egressID, OutConn: c,
+			OutPkt: p.rawPkt, Class: te.ClsScion}, nil
 	}
 
 	// ASTransit: pkts leaving from another AS BR.
 	if a, ok := p.d.internalNextHops[egressID]; ok {
-		return processResult{OutConn: p.d.internal, OutAddr: a, OutPkt: p.rawPkt}, nil
+		return processResult{OutConn: p.d.internal, OutAddr: a,
+			OutPkt: p.rawPkt, Class: te.ClsScion}, nil
 	}
 	errCode := slayers.SCMPCodeUnknownHopFieldEgress
 	if !p.infoField.ConsDir {
@@ -1325,6 +1407,7 @@ type bfdSend struct {
 	srcIA, dstIA     addr.IA
 	mac              hash.Hash
 	ifID             uint16
+	d                *DataPlane
 }
 
 func (b *bfdSend) String() string {
@@ -1377,8 +1460,22 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 	if err != nil {
 		return err
 	}
-	_, err = b.conn.WriteTo(buffer.Bytes(), b.dstAddr)
-	return err
+
+	d := b.d
+	if d.TE {
+		myQueue, ok := d.queueMap[b.conn]
+		if !ok {
+			return serrors.New("Error finding queues for scheduling")
+		}
+		err = myQueue.Enqueue(te.ClsBfd, buffer.Bytes(), b.dstAddr)
+		if err != nil {
+			return serrors.New("Enqueue failed", "err", err)
+		}
+		return nil
+	} else {
+		_, err = b.conn.WriteTo(buffer.Bytes(), b.dstAddr)
+		return err
+	}
 }
 
 type pathUpdater interface {
