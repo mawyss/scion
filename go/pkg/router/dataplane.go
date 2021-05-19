@@ -192,11 +192,13 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	d.internal = conn
 	d.internalIP = ip
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(bufSize)
+	if d.TE {
+		if d.queueMap == nil {
+			d.queueMap = make(map[BatchConn]*te.Queues)
+		}
+		if _, ok := d.queueMap[conn]; !ok {
+			d.queueMap[conn] = te.NewQueues(bufSize)
+		}
 	}
 	return nil
 }
@@ -221,11 +223,13 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 	}
 	d.external[ifID] = conn
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(bufSize)
+	if d.TE {
+		if d.queueMap == nil {
+			d.queueMap = make(map[BatchConn]*te.Queues)
+		}
+		if _, ok := d.queueMap[conn]; !ok {
+			d.queueMap[conn] = te.NewQueues(bufSize)
+		}
 	}
 	return nil
 }
@@ -297,11 +301,13 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 		}
 	}
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(bufSize)
+	if d.TE {
+		if d.queueMap == nil {
+			d.queueMap = make(map[BatchConn]*te.Queues)
+		}
+		if _, ok := d.queueMap[conn]; !ok {
+			d.queueMap[conn] = te.NewQueues(bufSize)
+		}
 	}
 
 	s := &bfdSend{
@@ -550,11 +556,7 @@ func (d *DataPlane) Run() error {
 						continue
 					}
 
-					if result.OutAddr == nil {
-						result.OutAddr = &net.UDPAddr{}
-					}
 					err := otherConnectionQueues.Enqueue(result.Class, result.OutPkt, result.OutAddr)
-					
 					if err != nil {
 						log.Debug("Enqueue failed", "err", err)
 						continue
