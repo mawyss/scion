@@ -55,27 +55,6 @@ const (
 // Number of packets to write in a single WriteBatch call.
 const outputBatchCnt = 16
 
-// TODO
-type ZeroAllocQueue struct {
-	emptyPackets  chan ipv4.Message
-	filledPackets chan ipv4.Message
-	borrowed      int
-}
-
-func newZeroAllocQueue(queueSize, maxPacketLength int) *ZeroAllocQueue {
-	q := &ZeroAllocQueue{}
-	q.emptyPackets = make(chan ipv4.Message, queueSize)
-	q.filledPackets = make(chan ipv4.Message, queueSize)
-	q.borrowed = 0
-
-	msgs := conn.NewReadMessages(queueSize)
-	for _, msg := range msgs {
-		msg.Buffers[0] = make([]byte, maxPacketLength)
-		q.emptyPackets <- msg
-	}
-	return q
-}
-
 // Queues describes the queues (one for each traffic class) for a certain router interface.
 // The 'mapping' translates traffic classes to their respective queue. The 'nonempty' channel is
 // used to signal to the scheduler that packets are ready, which is necessary to omit
@@ -90,7 +69,7 @@ type Queues struct {
 }
 
 type Scheduler interface {
-	Schedule(qs *Queues) ([]ipv4.Message, error) 
+	Schedule(qs *Queues) ([]ipv4.Message, error)
 }
 
 // NewQueues creates new queues.
@@ -107,10 +86,10 @@ func NewQueues(maxPacketLength int) *Queues {
 	qs.mapping[ClsScion] = newZeroAllocQueue(16, maxPacketLength)
 
 	qs.writeBuffer = conn.NewReadMessages(outputBatchCnt)
-
 	return qs
 }
 
+// SetScheduler assigns the corresponding scheduler to the interface queues.
 func (qs *Queues) SetScheduler(s SchedulerId) {
 	switch s {
 	case SchedRoundRobin:
@@ -126,40 +105,21 @@ func (qs *Queues) SetScheduler(s SchedulerId) {
 	}
 }
 
-// Enqueue adds the message 'm' to the queue corresponding to traffic class 'tc'.
+// Enqueue adds the message 'm' (destined to 'outAddr') to the queue corresponding to traffic
+// class 'tc'.
 func (qs *Queues) Enqueue(tc TrafficClass, m []byte, outAddr *net.UDPAddr) error {
-	if outAddr == nil {
-		outAddr = &net.UDPAddr{}
-	}
-
-	// Get correct zeroAllocQueue
+	// Get the correct queue
 	q, ok := qs.mapping[tc]
 	if !ok {
-		return serrors.New("unknown traffic class")
+		return serrors.New("unknown traffic class", "tc", tc)
 	}
 
-	// Retrieve free buffer if available
-	var p ipv4.Message
-	select {
-	case p = <-q.emptyPackets:
-	default:
-		// todo: set congestion flag?
-		return serrors.New("no free packet buffer", "traffic class", tc)
+	err := q.enqueue(m, outAddr)
+	if err != nil {
+		return serrors.WithCtx(err, "tc", tc)
 	}
-
-	// Copy the message into the buffer
-	p.Addr = outAddr
-	p.Buffers[0] = p.Buffers[0][:len(m)]
-	copy(p.Buffers[0], m)
-
-	// Put the packet into the queue
-	select {
-	case q.filledPackets <- p:
-		qs.setToNonempty()
-		return nil
-	default:
-		return serrors.New("queue full", "traffic class", tc)
-	}
+	qs.setToNonempty()
+	return nil
 }
 
 // setToNonempty signals to the scheduler that new messages are ready to be scheduled.
@@ -195,7 +155,7 @@ L:
 			break L
 		}
 	}
-	
+
 	q.borrowed = q.borrowed + counter
 	return counter, nil
 }
@@ -206,20 +166,21 @@ func (qs *Queues) Schedule() ([]ipv4.Message, error) {
 	return qs.scheduler.Schedule(qs)
 }
 
+// ReturnBuffers returns the buffers to the queues where they were taken from.
 func (qs *Queues) ReturnBuffers(ms []ipv4.Message) error {
 	counter := 0
 	for tc, q := range qs.mapping {
-		if counter + q.borrowed > len(ms) {
+		if counter+q.borrowed > len(ms) {
 			return serrors.New("too many packets to return", "number", len(ms))
 		}
 
 		for i := 0; i < q.borrowed; i++ {
 			// Reset buffer
-			ms[counter + i].Buffers[0] = ms[counter + i].Buffers[0][:0]
+			ms[counter+i].Buffers[0] = ms[counter+i].Buffers[0][:0]
 
 			// Return packet to queue buffer
 			select {
-			case q.emptyPackets <- ms[counter + i]:
+			case q.emptyPackets <- ms[counter+i]:
 			default:
 				log.Debug("test")
 				return serrors.New("queueBuffer full", "traffic class", tc)
@@ -230,4 +191,72 @@ func (qs *Queues) ReturnBuffers(ms []ipv4.Message) error {
 		q.borrowed = 0
 	}
 	return nil
+}
+
+// ZeroAllocQueue is a thread-safe queue for IP packets that operates on a fixed number of
+// preallocated packets. The memory overhead is therefore constant.
+type ZeroAllocQueue struct {
+	emptyPackets  chan ipv4.Message
+	filledPackets chan ipv4.Message
+	borrowed      int
+}
+
+// newZeroAllocQueue creates a new queue with 'queueSize' IP packets, where the maximal size of a
+// packet is given by 'maxPacketLength'.
+func newZeroAllocQueue(queueSize, maxPacketLength int) *ZeroAllocQueue {
+	q := &ZeroAllocQueue{}
+	q.emptyPackets = make(chan ipv4.Message, queueSize)
+	q.filledPackets = make(chan ipv4.Message, queueSize)
+	q.borrowed = 0
+
+	msgs := conn.NewReadMessages(queueSize)
+	for _, msg := range msgs {
+		msg.Buffers[0] = make([]byte, maxPacketLength)
+		q.emptyPackets <- msg
+	}
+	return q
+}
+
+func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
+	if outAddr == nil {
+		outAddr = &net.UDPAddr{}
+	}
+
+	// Retrieve free buffer if available
+	var p ipv4.Message
+	select {
+	case p = <-q.emptyPackets:
+	default:
+		// todo: set congestion flag?
+		return serrors.New("no empty packets available")
+	}
+
+	// Copy the message into the buffer
+	p.Addr = outAddr
+	p.Buffers[0] = p.Buffers[0][:len(m)]
+	copy(p.Buffers[0], m)
+
+	// Put the packet into the queue
+	select {
+	case q.filledPackets <- p:
+		return nil
+	default:
+		return serrors.New("queue full")
+	}
+}
+
+func (q *ZeroAllocQueue) dequeue(batchSize int, ms []ipv4.Message) int {
+	var counter int
+L:
+	for counter = 0; counter < batchSize; counter++ {
+		select {
+		case m := <-q.filledPackets:
+			ms[counter] = m
+		default:
+			break L
+		}
+	}
+
+	q.borrowed = q.borrowed + counter
+	return counter
 }

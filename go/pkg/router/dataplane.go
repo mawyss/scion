@@ -480,36 +480,6 @@ func (d *DataPlane) Run() error {
 			msg.Buffers[0] = make([]byte, bufSize)
 		}
 
-		// Start scheduling
-		if d.TE {
-			go func(rd BatchConn) {
-				defer log.HandlePanic()
-
-				myQueues, ok := d.queueMap[rd]
-				myQueues.SetScheduler(te.SchedStrictPriority)
-				if !ok {
-					panic("Error getting queues for scheduling")
-				}
-
-				for d.running {
-					myQueues.WaitUntilNonempty()
-					ms, err := myQueues.Schedule()
-					if err != nil {
-						log.Debug("Error scheduling packet", "err", err)
-					}
-
-					if len(ms) > 0 {
-						_, err = rd.WriteBatch(ms)
-
-						if err != nil {
-							log.Debug("Error writing packet", "err", err)
-						}
-						myQueues.ReturnBuffers(ms)
-					}
-				}
-			}(rd)
-		}
-
 		processor := newPacketProcessor(d, ingressID)
 		var scmpErr scmpError
 		for d.running {
@@ -556,7 +526,8 @@ func (d *DataPlane) Run() error {
 						continue
 					}
 
-					err := otherConnectionQueues.Enqueue(result.Class, result.OutPkt, result.OutAddr)
+					err := otherConnectionQueues.Enqueue(result.Class,
+						result.OutPkt, result.OutAddr)
 					if err != nil {
 						log.Debug("Enqueue failed", "err", err)
 						continue
@@ -577,6 +548,33 @@ func (d *DataPlane) Run() error {
 		}
 	}
 
+	write := func(rd BatchConn) {
+		defer log.HandlePanic()
+
+		myQueues, ok := d.queueMap[rd]
+		myQueues.SetScheduler(te.SchedStrictPriority)
+		if !ok {
+			panic("Error getting queues for scheduling")
+		}
+
+		for d.running {
+			myQueues.WaitUntilNonempty()
+			ms, err := myQueues.Schedule()
+			if err != nil {
+				log.Debug("Error scheduling packet", "err", err)
+			}
+
+			if len(ms) > 0 {
+				_, err = rd.WriteBatch(ms)
+
+				if err != nil {
+					log.Debug("Error writing packet", "err", err)
+				}
+				myQueues.ReturnBuffers(ms)
+			}
+		}
+	}
+
 	for k, v := range d.bfdSessions {
 		go func(ifID uint16, c bfdSession) {
 			defer log.HandlePanic()
@@ -585,12 +583,22 @@ func (d *DataPlane) Run() error {
 			}
 		}(k, v)
 	}
+
 	for ifID, v := range d.external {
+		go func(c BatchConn) {
+			defer log.HandlePanic()
+			write(c)
+		}(v)
 		go func(i uint16, c BatchConn) {
 			defer log.HandlePanic()
 			read(i, c)
 		}(ifID, v)
 	}
+
+	go func(c BatchConn) {
+		defer log.HandlePanic()
+		write(c)
+	}(d.internal)
 	go func(c BatchConn) {
 		defer log.HandlePanic()
 		read(0, c)

@@ -3,12 +3,12 @@ load("//lint:go.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "te.go",
-        "strict.go",
-        "roundrobin.go",
         "colibriprio.go",
         "others.go",
-        ],
+        "roundrobin.go",
+        "strict.go",
+        "te.go",
+    ],
     importpath = "github.com/scionproto/scion/go/pkg/router/te",
     visibility = ["//visibility:public"],
     deps = [
