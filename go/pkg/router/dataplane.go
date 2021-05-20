@@ -498,20 +498,7 @@ func (d *DataPlane) Run() error {
 					continue
 				}
 
-				otherConnectionQueues, ok := d.queueMap[result.OutConn]
-				if !ok {
-					log.Debug("Error finding queues for scheduling")
-					continue
-				}
-				var cls te.TrafficClass
-				if d.TE {
-					cls = result.Class
-				} else {
-					cls = te.ClsOthers
-				}
-				err = otherConnectionQueues.Enqueue(cls, result.OutPkt, result.OutAddr)
-				if err != nil {
-					log.Debug("Enqueue failed", "err", err)
+				if !d.enqueue(&result) {
 					continue
 				}
 
@@ -604,7 +591,7 @@ func (d *DataPlane) initMetrics() {
 	}
 }
 
-// addQueues creates new IP packet queues for the given connection.
+// addQueues creates new packet queues for the given connection.
 func (d *DataPlane) addQueues(conn BatchConn) {
 	if d.queueMap == nil {
 		d.queueMap = make(map[BatchConn]*te.Queues)
@@ -612,6 +599,31 @@ func (d *DataPlane) addQueues(conn BatchConn) {
 	if _, ok := d.queueMap[conn]; !ok {
 		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
 	}
+}
+
+// enqueue puts the processed packet into the queue of the correct router interface.
+func (d *DataPlane) enqueue(result *processResult) bool {
+	if result == nil {
+		return false
+	}
+
+	otherConnectionQueues, ok := d.queueMap[result.OutConn]
+	if !ok {
+		log.Debug("Error finding queues for scheduling")
+		return false
+	}
+	var cls te.TrafficClass
+	if d.TE {
+		cls = result.Class
+	} else {
+		cls = te.ClsOthers
+	}
+	err := otherConnectionQueues.Enqueue(cls, result.OutPkt, result.OutAddr)
+	if err != nil {
+		log.Debug("Enqueue failed", "err", err)
+		return false
+	}
+	return true
 }
 
 type processResult struct {
