@@ -25,13 +25,11 @@ import (
 
 type RoundRobinScheduler struct{}
 
-// scheduleRoundRobin schedules the packets based on round-robin.
+// scheduleRoundRobin schedules the packets based on round-robin over all queues.
 func (s *RoundRobinScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
-	messageBuffer := qs.writeBuffer
-
 	read := 0
 	for cls := range qs.mapping {
-		n, err := qs.dequeue(cls, 1, messageBuffer[read:])
+		n, err := qs.dequeue(cls, 1, qs.writeBuffer[read:])
 		if err != nil {
 			return nil, err
 		}
@@ -42,5 +40,5 @@ func (s *RoundRobinScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 		qs.setToNonempty()
 	}
 
-	return messageBuffer[:read], nil
+	return qs.writeBuffer[:read], nil
 }

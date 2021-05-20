@@ -192,12 +192,7 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	d.internal = conn
 	d.internalIP = ip
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
-	}
+	d.addQueues(conn)
 	return nil
 }
 
@@ -221,12 +216,7 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 	}
 	d.external[ifID] = conn
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
-	}
+	d.addQueues(conn)
 	return nil
 }
 
@@ -297,12 +287,7 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 		}
 	}
 
-	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
-	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
-	}
+	d.addQueues(conn)
 
 	s := &bfdSend{
 		conn:    conn,
@@ -616,6 +601,16 @@ func (d *DataPlane) initMetrics() {
 		}
 		labels = interfaceToMetricLabels(id, d.localIA, d.neighborIAs)
 		d.forwardingMetrics[id] = initForwardingMetrics(d.Metrics, labels)
+	}
+}
+
+// addQueues creates new IP packet queues for the given connection.
+func (d *DataPlane) addQueues(conn BatchConn) {
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
 	}
 }
 

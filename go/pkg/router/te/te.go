@@ -52,7 +52,8 @@ const (
 	SchedStrictPriority
 )
 
-// Number of packets to write in a single WriteBatch call.
+// Number of packets to write in a single WriteBatch call. It has to be at least as high as
+// the number of different traffic classes.
 const outputBatchCnt = 16
 
 // Queues describes the queues (one for each traffic class) for a certain router interface.

@@ -28,13 +28,10 @@ type ColibriPriorityScheduler struct{}
 // scheduleColibriPrio gives priority to Colibri packets, but also includes up to one packet of
 // each other traffic class.
 func (s *ColibriPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
-	maxSchedSize := 16
-	messageBuffer := qs.writeBuffer
-
 	// Prioritize Colibri packets
 	nrQueues := len(qs.mapping)
 	read := 0
-	n, err := qs.dequeue(ClsColibri, maxSchedSize-nrQueues, messageBuffer[read:])
+	n, err := qs.dequeue(ClsColibri, outputBatchCnt-nrQueues, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +39,7 @@ func (s *ColibriPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) 
 
 	// Remaining classes are scheduled using round-robin (including one Colibri packet)
 	for cls := range qs.mapping {
-		n, err := qs.dequeue(cls, 1, messageBuffer[read:])
+		n, err := qs.dequeue(cls, 1, qs.writeBuffer[read:])
 		if err != nil {
 			return nil, err
 		}
@@ -53,5 +50,5 @@ func (s *ColibriPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) 
 		qs.setToNonempty()
 	}
 
-	return messageBuffer[:read], nil
+	return qs.writeBuffer[:read], nil
 }

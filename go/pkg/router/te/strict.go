@@ -29,41 +29,38 @@ type StrictPriorityScheduler struct{}
 // queue is only scheduled if all higher priority queues are empty.
 // The priorities are: COLIBRI > EPIC > BFD > SCMP > SCION > Others.
 func (s *StrictPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
-	maxSchedSize := 8
-	messageBuffer := qs.writeBuffer
-
 	read := 0
-	n, err := qs.dequeue(ClsColibri, maxSchedSize-read, messageBuffer[read:])
+	n, err := qs.dequeue(ClsColibri, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
 	read = read + n
 
-	n, err = qs.dequeue(ClsEpic, maxSchedSize-read, messageBuffer[read:])
+	n, err = qs.dequeue(ClsEpic, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
 	read = read + n
 
-	n, err = qs.dequeue(ClsBfd, maxSchedSize-read, messageBuffer[read:])
+	n, err = qs.dequeue(ClsBfd, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
 	read = read + n
 
-	n, err = qs.dequeue(ClsScmp, maxSchedSize-read, messageBuffer[read:])
+	n, err = qs.dequeue(ClsScmp, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
 	read = read + n
 
-	n, err = qs.dequeue(ClsScion, maxSchedSize-read, messageBuffer[read:])
+	n, err = qs.dequeue(ClsScion, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
 	read = read + n
 
-	n, err = qs.dequeue(ClsOthers, maxSchedSize-read, messageBuffer[read:])
+	n, err = qs.dequeue(ClsOthers, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
@@ -73,5 +70,5 @@ func (s *StrictPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 		qs.setToNonempty()
 	}
 
-	return messageBuffer[:read], nil
+	return qs.writeBuffer[:read], nil
 }
