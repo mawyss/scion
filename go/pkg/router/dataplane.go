@@ -497,11 +497,9 @@ func (d *DataPlane) Run() error {
 				if result.OutConn == nil { // e.g. BFD case no message is forwarded
 					continue
 				}
-
 				if !d.enqueue(&result) {
 					continue
 				}
-
 				// ok metric
 				outputCounters := d.forwardingMetrics[result.EgressID]
 				outputCounters.OutputPacketsTotal.Inc()
@@ -603,10 +601,6 @@ func (d *DataPlane) addQueues(conn BatchConn) {
 
 // enqueue puts the processed packet into the queue of the correct router interface.
 func (d *DataPlane) enqueue(result *processResult) bool {
-	if result == nil {
-		return false
-	}
-
 	otherConnectionQueues, ok := d.queueMap[result.OutConn]
 	if !ok {
 		log.Debug("Error finding queues for scheduling")
@@ -1346,8 +1340,8 @@ func (p *scionPacketProcessor) processOHP() (processResult, error) {
 		// OHP should always be directed to the correct BR.
 		if c, ok := p.d.external[ohp.FirstHop.ConsEgress]; ok {
 			// buffer should already be correct
-			return processResult{EgressID: ohp.FirstHop.ConsEgress, OutConn: c, OutPkt: p.rawPkt},
-				nil
+			return processResult{EgressID: ohp.FirstHop.ConsEgress, OutConn: c, OutPkt: p.rawPkt,
+				Class: te.ClsOhp}, nil
 		}
 		// TODO parameter problem invalid interface
 		return processResult{}, serrors.WithCtx(cannotRoute, "type", "ohp",
@@ -1368,7 +1362,8 @@ func (p *scionPacketProcessor) processOHP() (processResult, error) {
 	if err != nil {
 		return processResult{}, err
 	}
-	return processResult{OutConn: p.d.internal, OutAddr: a, OutPkt: p.rawPkt}, nil
+	return processResult{OutConn: p.d.internal, OutAddr: a, OutPkt: p.rawPkt,
+		Class: te.ClsOhp}, nil
 }
 
 func (d *DataPlane) resolveLocalDst(s slayers.SCION) (*net.UDPAddr, error) {

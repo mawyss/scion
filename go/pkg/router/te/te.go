@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package te adds traffic engineering capabilities to the border router.
-// Traffic engineering can be enabled/disabled in 'scion/go/posix-router/main.go'.
-// The purpose of this package is to demonstrate the feasibility of integrating
-// scheduling into the border router. Only basic scheduling algorithms are
-// implemented, more elaborate ones might be necessary in the future.
+// Package te adds traffic engineering capabilities (packet prioritization), to the
+// border router. Traffic engineering can be enabled/disabled in 'scion/go/posix-router/main.go'.
 package te
 
 import (
@@ -40,6 +37,7 @@ const (
 	ClsColibri
 	ClsEpic
 	ClsBfd
+	ClsOhp
 	ClsScmp
 	ClsScion
 )
@@ -85,6 +83,7 @@ func NewQueues(scheduling bool, maxPacketLength int) *Queues {
 		qs.mapping[ClsColibri] = newZeroAllocQueue(16, maxPacketLength)
 		qs.mapping[ClsEpic] = newZeroAllocQueue(16, maxPacketLength)
 		qs.mapping[ClsBfd] = newZeroAllocQueue(4, maxPacketLength)
+		qs.mapping[ClsOhp] = newZeroAllocQueue(4, maxPacketLength)
 		qs.mapping[ClsScmp] = newZeroAllocQueue(4, maxPacketLength)
 		qs.mapping[ClsScion] = newZeroAllocQueue(16, maxPacketLength)
 	} else {
@@ -95,7 +94,7 @@ func NewQueues(scheduling bool, maxPacketLength int) *Queues {
 	return qs
 }
 
-// SetScheduler assigns the corresponding scheduler to the interface queues.
+// SetScheduler assigns the provided scheduler to the queues.
 func (qs *Queues) SetScheduler(s SchedulerId) {
 	switch s {
 	case SchedRoundRobin:
@@ -233,7 +232,6 @@ func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
 	select {
 	case p = <-q.emptyPackets:
 	default:
-		// todo: set congestion flag?
 		return serrors.New("no empty packets available")
 	}
 
