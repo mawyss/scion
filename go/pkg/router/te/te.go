@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package te adds traffic engineering capabilities (packet prioritization), to the
+// Package te adds traffic engineering capabilities (packet prioritization) to the
 // border router. Traffic engineering can be enabled/disabled in 'scion/go/posix-router/main.go'.
 package te
 
