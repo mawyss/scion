@@ -192,13 +192,11 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	d.internal = conn
 	d.internalIP = ip
 
-	if d.TE {
-		if d.queueMap == nil {
-			d.queueMap = make(map[BatchConn]*te.Queues)
-		}
-		if _, ok := d.queueMap[conn]; !ok {
-			d.queueMap[conn] = te.NewQueues(bufSize)
-		}
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
 	}
 	return nil
 }
@@ -223,13 +221,11 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 	}
 	d.external[ifID] = conn
 
-	if d.TE {
-		if d.queueMap == nil {
-			d.queueMap = make(map[BatchConn]*te.Queues)
-		}
-		if _, ok := d.queueMap[conn]; !ok {
-			d.queueMap[conn] = te.NewQueues(bufSize)
-		}
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
 	}
 	return nil
 }
@@ -301,13 +297,11 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 		}
 	}
 
-	if d.TE {
-		if d.queueMap == nil {
-			d.queueMap = make(map[BatchConn]*te.Queues)
-		}
-		if _, ok := d.queueMap[conn]; !ok {
-			d.queueMap[conn] = te.NewQueues(bufSize)
-		}
+	if d.queueMap == nil {
+		d.queueMap = make(map[BatchConn]*te.Queues)
+	}
+	if _, ok := d.queueMap[conn]; !ok {
+		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
 	}
 
 	s := &bfdSend{
@@ -519,27 +513,23 @@ func (d *DataPlane) Run() error {
 					continue
 				}
 
-				if d.TE {
-					otherConnectionQueues, ok := d.queueMap[result.OutConn]
-					if !ok {
-						log.Debug("Error finding queues for scheduling")
-						continue
-					}
-
-					err := otherConnectionQueues.Enqueue(result.Class,
-						result.OutPkt, result.OutAddr)
-					if err != nil {
-						log.Debug("Enqueue failed", "err", err)
-						continue
-					}
-				} else {
-					_, err = result.OutConn.WriteTo(result.OutPkt, result.OutAddr)
-					if err != nil {
-						log.Debug("Error writing packet", "err", err)
-						// error metric
-						continue
-					}
+				otherConnectionQueues, ok := d.queueMap[result.OutConn]
+				if !ok {
+					log.Debug("Error finding queues for scheduling")
+					continue
 				}
+				var cls te.TrafficClass
+				if d.TE {
+					cls = result.Class
+				} else {
+					cls = te.ClsOthers
+				}
+				err = otherConnectionQueues.Enqueue(cls, result.OutPkt, result.OutAddr)
+				if err != nil {
+					log.Debug("Enqueue failed", "err", err)
+					continue
+				}
+
 				// ok metric
 				outputCounters := d.forwardingMetrics[result.EgressID]
 				outputCounters.OutputPacketsTotal.Inc()
@@ -552,7 +542,11 @@ func (d *DataPlane) Run() error {
 		defer log.HandlePanic()
 
 		myQueues, ok := d.queueMap[rd]
-		myQueues.SetScheduler(te.SchedStrictPriority)
+		if d.TE {
+			myQueues.SetScheduler(te.SchedStrictPriority)
+		} else {
+			myQueues.SetScheduler(te.SchedOthersOnly)
+		}
 		if !ok {
 			panic("Error getting queues for scheduling")
 		}
@@ -1472,20 +1466,21 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 	}
 
 	d := b.d
-	if d.TE {
-		myQueue, ok := d.queueMap[b.conn]
-		if !ok {
-			return serrors.New("Error finding queues for scheduling")
-		}
-		err = myQueue.Enqueue(te.ClsBfd, buffer.Bytes(), b.dstAddr)
-		if err != nil {
-			return serrors.New("Enqueue failed", "err", err)
-		}
-		return nil
-	} else {
-		_, err = b.conn.WriteTo(buffer.Bytes(), b.dstAddr)
-		return err
+	myQueue, ok := d.queueMap[b.conn]
+	if !ok {
+		return serrors.New("Error finding queues for scheduling")
 	}
+	var cls te.TrafficClass
+	if d.TE {
+		cls = te.ClsBfd
+	} else {
+		cls = te.ClsOthers
+	}
+	err = myQueue.Enqueue(cls, buffer.Bytes(), b.dstAddr)
+	if err != nil {
+		return serrors.WrapStr("Enqueue failed", err)
+	}
+	return nil
 }
 
 type pathUpdater interface {

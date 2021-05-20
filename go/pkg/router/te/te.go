@@ -72,18 +72,23 @@ type Scheduler interface {
 	Schedule(qs *Queues) ([]ipv4.Message, error)
 }
 
-// NewQueues creates new queues.
-func NewQueues(maxPacketLength int) *Queues {
+// NewQueues creates new queues. If 'scheduling' is set to true, a queue is allocated for each
+// traffic class, otherwise only one large queue for 'ClsOthers' will be created.
+func NewQueues(scheduling bool, maxPacketLength int) *Queues {
 	qs := &Queues{}
 	qs.nonempty = make(chan bool, 1)
 	qs.mapping = make(map[TrafficClass]*ZeroAllocQueue)
 
-	qs.mapping[ClsOthers] = newZeroAllocQueue(4, maxPacketLength)
-	qs.mapping[ClsColibri] = newZeroAllocQueue(16, maxPacketLength)
-	qs.mapping[ClsEpic] = newZeroAllocQueue(16, maxPacketLength)
-	qs.mapping[ClsBfd] = newZeroAllocQueue(4, maxPacketLength)
-	qs.mapping[ClsScmp] = newZeroAllocQueue(4, maxPacketLength)
-	qs.mapping[ClsScion] = newZeroAllocQueue(16, maxPacketLength)
+	if scheduling {
+		qs.mapping[ClsOthers] = newZeroAllocQueue(4, maxPacketLength)
+		qs.mapping[ClsColibri] = newZeroAllocQueue(16, maxPacketLength)
+		qs.mapping[ClsEpic] = newZeroAllocQueue(16, maxPacketLength)
+		qs.mapping[ClsBfd] = newZeroAllocQueue(4, maxPacketLength)
+		qs.mapping[ClsScmp] = newZeroAllocQueue(4, maxPacketLength)
+		qs.mapping[ClsScion] = newZeroAllocQueue(16, maxPacketLength)
+	} else {
+		qs.mapping[ClsOthers] = newZeroAllocQueue(64, maxPacketLength)
+	}
 
 	qs.writeBuffer = conn.NewReadMessages(outputBatchCnt)
 	return qs
