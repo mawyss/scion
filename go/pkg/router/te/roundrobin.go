@@ -25,7 +25,7 @@ import (
 
 type RoundRobinScheduler struct{}
 
-// scheduleRoundRobin schedules the packets based on round-robin over all queues.
+// Schedule schedules the packets based on round-robin over all queues.
 func (s *RoundRobinScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 	read := 0
 	for cls := range qs.mapping {

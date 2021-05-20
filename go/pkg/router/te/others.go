@@ -25,7 +25,7 @@ import (
 
 type OthersOnlyScheduler struct{}
 
-// scheduleOthersOnly only forwards packets from the 'Others' queue, all other queues are ignored.
+// Schedule only forwards packets from the 'Others' queue, all other queues are ignored.
 func (s *OthersOnlyScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 	read, err := qs.dequeue(ClsOthers, outputBatchCnt, qs.writeBuffer)
 	if err != nil {

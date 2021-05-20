@@ -25,7 +25,7 @@ import (
 
 type ColibriPriorityScheduler struct{}
 
-// scheduleColibriPrio gives priority to Colibri packets, but also includes up to one packet of
+// Schedule gives priority to Colibri packets, but also includes up to one packet of
 // each other traffic class.
 func (s *ColibriPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 	// Prioritize Colibri packets

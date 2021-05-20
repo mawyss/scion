@@ -25,7 +25,7 @@ import (
 
 type StrictPriorityScheduler struct{}
 
-// scheduleStrictPriority schedules packets based on a strict hierarchy, where a message from a
+// Schedule schedules packets based on a strict hierarchy, where a message from a
 // queue is only scheduled if all higher priority queues are empty.
 // The priorities are: COLIBRI > EPIC > BFD > SCMP > SCION > Others.
 func (s *StrictPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
@@ -43,6 +43,12 @@ func (s *StrictPriorityScheduler) Schedule(qs *Queues) ([]ipv4.Message, error) {
 	read = read + n
 
 	n, err = qs.dequeue(ClsBfd, outputBatchCnt-read, qs.writeBuffer[read:])
+	if err != nil {
+		return nil, err
+	}
+	read = read + n
+
+	n, err = qs.dequeue(ClsOhp, outputBatchCnt-read, qs.writeBuffer[read:])
 	if err != nil {
 		return nil, err
 	}
