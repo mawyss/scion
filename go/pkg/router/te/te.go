@@ -226,10 +226,6 @@ func newZeroAllocQueue(queueSize, maxPacketLength int) *ZeroAllocQueue {
 }
 
 func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
-	//if outAddr == nil {
-	//	outAddr = &net.UDPAddr{}
-	//}
-
 	// Retrieve free buffer if available
 	var p ipv4.Message
 	select {
@@ -247,10 +243,6 @@ func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
 		addr.IP = addr.IP[:len(outAddr.IP)]
 		copy(addr.IP, outAddr.IP)
 		addr.Port = outAddr.Port
-		//p.Addr = &net.UDPAddr{
-		//	IP: append([]byte{}, outAddr.IP...)			,
-		//	Port: outAddr.Port,
-		//}
 	} else {
 		addr.IP = addr.IP[:0]
 	}
