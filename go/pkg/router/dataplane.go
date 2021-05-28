@@ -105,7 +105,7 @@ type DataPlane struct {
 	Metrics           *Metrics
 	forwardingMetrics map[uint16]forwardingMetrics
 	TE                bool
-	queueMap          map[BatchConn]*te.Queues
+	queueMap          map[uint16]*te.Queues
 }
 
 var (
@@ -192,7 +192,6 @@ func (d *DataPlane) AddInternalInterface(conn BatchConn, ip net.IP) error {
 	d.internal = conn
 	d.internalIP = ip
 
-	d.addQueues(conn)
 	return nil
 }
 
@@ -216,7 +215,6 @@ func (d *DataPlane) AddExternalInterface(ifID uint16, conn BatchConn) error {
 	}
 	d.external[ifID] = conn
 
-	d.addQueues(conn)
 	return nil
 }
 
@@ -286,8 +284,6 @@ func (d *DataPlane) AddExternalInterfaceBFD(ifID uint16, conn BatchConn,
 				With(labels...),
 		}
 	}
-
-	d.addQueues(conn)
 
 	s := &bfdSend{
 		conn:    conn,
@@ -497,9 +493,21 @@ func (d *DataPlane) Run() error {
 				if result.OutConn == nil { // e.g. BFD case no message is forwarded
 					continue
 				}
+
+
 				if !d.enqueue(&result) {
 					continue
 				}
+
+				/*
+				_, err = result.OutConn.WriteTo(result.OutPkt, result.OutAddr)
+				if err != nil {
+					log.Debug("Error writing packet", "err", err)
+					// error metric
+					continue
+				}
+				*/
+
 				// ok metric
 				outputCounters := d.forwardingMetrics[result.EgressID]
 				outputCounters.OutputPacketsTotal.Inc()
@@ -508,17 +516,17 @@ func (d *DataPlane) Run() error {
 		}
 	}
 
-	write := func(rd BatchConn) {
+	write := func(egressID uint16, rd BatchConn) {
 		defer log.HandlePanic()
 
-		myQueues, ok := d.queueMap[rd]
+		myQueues, ok := d.queueMap[egressID]
+		if !ok {
+			panic("Error getting queues for scheduling")
+		}
 		if d.TE {
 			myQueues.SetScheduler(te.SchedStrictPriority)
 		} else {
 			myQueues.SetScheduler(te.SchedOthersOnly)
-		}
-		if !ok {
-			panic("Error getting queues for scheduling")
 		}
 
 		for d.running {
@@ -533,7 +541,7 @@ func (d *DataPlane) Run() error {
 					addr := m.Addr.(*net.UDPAddr)
 					_, err = rd.WriteTo(m.Buffers[0], addr)
 					if err != nil {
-						log.Debug("Error writing packet", "err", err)
+						log.Debug("Error writing packet", "err", err, "len(ms)", len(ms))
 					}
 				}
 				myQueues.ReturnBuffers(ms)
@@ -550,11 +558,16 @@ func (d *DataPlane) Run() error {
 		}(k, v)
 	}
 
+	for ifID, _ := range d.external {
+		d.addQueues(ifID)
+	}
+	d.addQueues(0)
+
 	for ifID, v := range d.external {
-		go func(c BatchConn) {
+		go func(i uint16, c BatchConn) {
 			defer log.HandlePanic()
-			write(c)
-		}(v)
+			write(i, c)
+		}(ifID, v)
 		go func(i uint16, c BatchConn) {
 			defer log.HandlePanic()
 			read(i, c)
@@ -563,7 +576,7 @@ func (d *DataPlane) Run() error {
 
 	go func(c BatchConn) {
 		defer log.HandlePanic()
-		write(c)
+		write(0, c)
 	}(d.internal)
 	go func(c BatchConn) {
 		defer log.HandlePanic()
@@ -591,19 +604,19 @@ func (d *DataPlane) initMetrics() {
 	}
 }
 
-// addQueues creates new packet queues for the given connection.
-func (d *DataPlane) addQueues(conn BatchConn) {
+// addQueues creates new packet queues for the given interface.
+func (d *DataPlane) addQueues(ifID uint16) {
 	if d.queueMap == nil {
-		d.queueMap = make(map[BatchConn]*te.Queues)
+		d.queueMap = make(map[uint16]*te.Queues)
 	}
-	if _, ok := d.queueMap[conn]; !ok {
-		d.queueMap[conn] = te.NewQueues(d.TE, bufSize)
+	if _, ok := d.queueMap[ifID]; !ok {
+		d.queueMap[ifID] = te.NewQueues(d.TE, bufSize)
 	}
 }
 
 // enqueue puts the processed packet into the queue of the correct router interface.
 func (d *DataPlane) enqueue(result *processResult) bool {
-	otherConnectionQueues, ok := d.queueMap[result.OutConn]
+	otherConnectionQueues, ok := d.queueMap[result.EgressID]
 	if !ok {
 		log.Debug("Error finding queues for scheduling")
 		return false
@@ -1469,8 +1482,13 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 		return err
 	}
 
+	//_, err = b.conn.WriteTo(buffer.Bytes(), b.dstAddr)
+	//return err
+	//return nil
+
+	
 	d := b.d
-	myQueue, ok := d.queueMap[b.conn]
+	myQueue, ok := d.queueMap[b.ifID]
 	if !ok {
 		return serrors.New("Error finding queues for scheduling")
 	}
@@ -1485,6 +1503,7 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 		return serrors.WrapStr("Enqueue failed", err)
 	}
 	return nil
+	
 }
 
 type scmpPacker struct {

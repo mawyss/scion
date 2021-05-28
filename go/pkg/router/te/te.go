@@ -217,15 +217,18 @@ func newZeroAllocQueue(queueSize, maxPacketLength int) *ZeroAllocQueue {
 	msgs := conn.NewReadMessages(queueSize)
 	for _, msg := range msgs {
 		msg.Buffers[0] = make([]byte, maxPacketLength)
+		msg.Addr = &net.UDPAddr{
+			IP: make([]byte, 16),
+		}
 		q.emptyPackets <- msg
 	}
 	return q
 }
 
 func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
-	if outAddr == nil {
-		outAddr = &net.UDPAddr{}
-	}
+	//if outAddr == nil {
+	//	outAddr = &net.UDPAddr{}
+	//}
 
 	// Retrieve free buffer if available
 	var p ipv4.Message
@@ -236,9 +239,21 @@ func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
 	}
 
 	// Copy the message into the buffer
-	p.Addr = outAddr
 	p.Buffers[0] = p.Buffers[0][:len(m)]
 	copy(p.Buffers[0], m)
+	
+	addr := p.Addr.(*net.UDPAddr)
+	if outAddr != nil {
+		addr.IP = addr.IP[:len(outAddr.IP)]
+		copy(addr.IP, outAddr.IP)
+		addr.Port = outAddr.Port
+		//p.Addr = &net.UDPAddr{
+		//	IP: append([]byte{}, outAddr.IP...)			,
+		//	Port: outAddr.Port,
+		//}
+	} else {
+		addr.IP = addr.IP[:0]
+	}
 
 	// Put the packet into the queue
 	select {
