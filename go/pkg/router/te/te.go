@@ -241,7 +241,7 @@ func (q *ZeroAllocQueue) enqueue(m []byte, outAddr *net.UDPAddr) error {
 	// Copy the message into the buffer
 	p.Buffers[0] = p.Buffers[0][:len(m)]
 	copy(p.Buffers[0], m)
-	
+
 	addr := p.Addr.(*net.UDPAddr)
 	if outAddr != nil {
 		addr.IP = addr.IP[:len(outAddr.IP)]

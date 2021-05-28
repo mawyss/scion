@@ -493,25 +493,9 @@ func (d *DataPlane) Run() error {
 				if result.OutConn == nil { // e.g. BFD case no message is forwarded
 					continue
 				}
-
-
 				if !d.enqueue(&result) {
 					continue
 				}
-
-				/*
-				_, err = result.OutConn.WriteTo(result.OutPkt, result.OutAddr)
-				if err != nil {
-					log.Debug("Error writing packet", "err", err)
-					// error metric
-					continue
-				}
-				*/
-
-				// ok metric
-				outputCounters := d.forwardingMetrics[result.EgressID]
-				outputCounters.OutputPacketsTotal.Inc()
-				outputCounters.OutputBytesTotal.Add(float64(len(result.OutPkt)))
 			}
 		}
 	}
@@ -537,17 +521,34 @@ func (d *DataPlane) Run() error {
 			}
 
 			if len(ms) > 0 {
-				for _, m := range ms {
-					addr := m.Addr.(*net.UDPAddr)
-					_, err = rd.WriteTo(m.Buffers[0], addr)
-					if err != nil {
-						log.Debug("Error writing packet", "err", err, "len(ms)", len(ms))
-					}
+				pkts, err := rd.WriteBatch(ms)
+				if err != nil {
+					log.Debug("Error writing packet batch", "err", err)
+					continue
 				}
+				if pkts < len(ms) {
+					log.Debug("Not all packets of the batch could be sent",
+						"input", len(ms), "sent", pkts)
+				}
+
+				// ok metric
+				outputCounters := d.forwardingMetrics[egressID]
+				sum := 0
+				for _, m := range ms[:pkts] {
+					outputCounters.OutputPacketsTotal.Inc()
+					sum = sum + len(m.Buffers[0])
+				}
+				outputCounters.OutputBytesTotal.Add(float64(sum))
+
 				myQueues.ReturnBuffers(ms)
 			}
 		}
 	}
+
+	for ifID := range d.external {
+		d.addQueues(ifID)
+	}
+	d.addQueues(0)
 
 	for k, v := range d.bfdSessions {
 		go func(ifID uint16, c bfdSession) {
@@ -557,11 +558,6 @@ func (d *DataPlane) Run() error {
 			}
 		}(k, v)
 	}
-
-	for ifID, _ := range d.external {
-		d.addQueues(ifID)
-	}
-	d.addQueues(0)
 
 	for ifID, v := range d.external {
 		go func(i uint16, c BatchConn) {
@@ -1482,28 +1478,16 @@ func (b *bfdSend) Send(bfd *layers.BFD) error {
 		return err
 	}
 
-	//_, err = b.conn.WriteTo(buffer.Bytes(), b.dstAddr)
-	//return err
-	//return nil
-
-	
-	d := b.d
-	myQueue, ok := d.queueMap[b.ifID]
-	if !ok {
-		return serrors.New("Error finding queues for scheduling")
+	r := &processResult{
+		OutAddr:  b.dstAddr,
+		OutPkt:   buffer.Bytes(),
+		EgressID: b.ifID,
+		Class:    te.ClsBfd,
 	}
-	var cls te.TrafficClass
-	if d.TE {
-		cls = te.ClsBfd
-	} else {
-		cls = te.ClsOthers
-	}
-	err = myQueue.Enqueue(cls, buffer.Bytes(), b.dstAddr)
-	if err != nil {
-		return serrors.WrapStr("Enqueue failed", err)
+	if !b.d.enqueue(r) {
+		return serrors.New("Bfd enqueue failed")
 	}
 	return nil
-	
 }
 
 type scmpPacker struct {
