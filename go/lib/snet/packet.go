@@ -16,14 +16,17 @@ package snet
 
 import (
 	"net"
+	"time"
 
 	"github.com/google/gopacket"
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
+	libepic "github.com/scionproto/scion/go/lib/epic"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
+	"github.com/scionproto/scion/go/lib/slayers/path/epic"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
 	"github.com/scionproto/scion/go/lib/spath"
 )
@@ -32,6 +35,7 @@ import (
 // instantiate it.
 type Payload interface {
 	toLayers(scn *slayers.SCION) []gopacket.SerializableLayer
+	Length() int
 }
 
 // UDPPayload is a simple UDP payload.
@@ -48,6 +52,10 @@ func (m UDPPayload) toLayers(scn *slayers.SCION) []gopacket.SerializableLayer {
 	}
 	udp.SetNetworkLayerForChecksum(scn)
 	return []gopacket.SerializableLayer{&udp, gopacket.Payload(m.Payload)}
+}
+
+func (m UDPPayload) Length() int {
+	return 8 + len(m.Payload)
 }
 
 // SCMPPayload is the interface that all SCMP payloads must implement. It can be
@@ -79,6 +87,10 @@ func (SCMPDestinationUnreachable) Type() slayers.SCMPType {
 // Code returns the SCMP code.
 func (m SCMPDestinationUnreachable) Code() slayers.SCMPCode { return m.code }
 
+func (m SCMPDestinationUnreachable) Length() int {
+	return 8 + len(m.Payload)
+}
+
 // SCMPPacketTooBig indicates that a packet was too big.
 type SCMPPacketTooBig struct {
 	MTU     uint16
@@ -96,6 +108,10 @@ func (SCMPPacketTooBig) Type() slayers.SCMPType {
 
 // Code returns the SCMP code.
 func (SCMPPacketTooBig) Code() slayers.SCMPCode { return 0 }
+
+func (m SCMPPacketTooBig) Length() int {
+	return 8 + len(m.Payload)
+}
 
 // SCMPParameterProblem is the SCMP parameter problem message.
 type SCMPParameterProblem struct {
@@ -117,6 +133,10 @@ func (SCMPParameterProblem) Type() slayers.SCMPType {
 
 // Code returns the SCMP code.
 func (m SCMPParameterProblem) Code() slayers.SCMPCode { return m.code }
+
+func (m SCMPParameterProblem) Length() int {
+	return 8 + len(m.Payload)
+}
 
 // SCMPExternalInterfaceDown is the message that indicates that an interface is
 // down.
@@ -143,6 +163,10 @@ func (SCMPExternalInterfaceDown) Type() slayers.SCMPType {
 
 // Code returns the SCMP code.
 func (SCMPExternalInterfaceDown) Code() slayers.SCMPCode { return 0 }
+
+func (m SCMPExternalInterfaceDown) Length() int {
+	return 20 + len(m.Payload)
+}
 
 // SCMPInternalConnectivityDown is the message that an internal interface is
 // down.
@@ -171,6 +195,10 @@ func (SCMPInternalConnectivityDown) Type() slayers.SCMPType {
 // Code returns the SCMP code.
 func (SCMPInternalConnectivityDown) Code() slayers.SCMPCode { return 0 }
 
+func (m SCMPInternalConnectivityDown) Length() int {
+	return 28 + len(m.Payload)
+}
+
 // SCMPEchoRequest is the SCMP echo request payload.
 type SCMPEchoRequest struct {
 	Identifier uint16
@@ -193,6 +221,10 @@ func (SCMPEchoRequest) Type() slayers.SCMPType { return slayers.SCMPTypeEchoRequ
 
 // Code returns the SCMP code.
 func (SCMPEchoRequest) Code() slayers.SCMPCode { return 0 }
+
+func (m SCMPEchoRequest) Length() int {
+	return 8 + len(m.Payload)
+}
 
 // SCMPEchoReply is the SCMP echo reply payload.
 type SCMPEchoReply struct {
@@ -217,6 +249,10 @@ func (SCMPEchoReply) Type() slayers.SCMPType { return slayers.SCMPTypeEchoReply 
 // Code returns the SCMP code.
 func (SCMPEchoReply) Code() slayers.SCMPCode { return 0 }
 
+func (m SCMPEchoReply) Length() int {
+	return 8 + len(m.Payload)
+}
+
 // SCMPTracerouteRequest is the SCMP traceroute request payload.
 type SCMPTracerouteRequest struct {
 	Identifier uint16
@@ -238,6 +274,10 @@ func (SCMPTracerouteRequest) Type() slayers.SCMPType { return slayers.SCMPTypeTr
 
 // Code returns the SCMP code.
 func (SCMPTracerouteRequest) Code() slayers.SCMPCode { return 0 }
+
+func (m SCMPTracerouteRequest) Length() int {
+	return 24
+}
 
 // SCMPTracerouteReply is the SCMP traceroute reply payload.
 type SCMPTracerouteReply struct {
@@ -264,6 +304,10 @@ func (SCMPTracerouteReply) Type() slayers.SCMPType { return slayers.SCMPTypeTrac
 
 // Code returns the SCMP code.
 func (SCMPTracerouteReply) Code() slayers.SCMPCode { return 0 }
+
+func (m SCMPTracerouteReply) Length() int {
+	return 24
+}
 
 func toLayers(scmpPld SCMPPayload,
 	scn *slayers.SCION, details gopacket.SerializableLayer,
@@ -516,12 +560,39 @@ func (p *Packet) Serialize() error {
 	if err = scionLayer.Path.DecodeFromBytes(p.Path.Raw); err != nil {
 		return serrors.WrapStr("decoding path", err)
 	}
-	// XXX this is for convenience when debugging with delve
+
+	scionLayer.PayloadLen = uint16(p.Payload.Length())
 	if p.Path.Type == scion.PathType {
 		sp := scionLayer.Path.(*scion.Raw)
-		scionLayer.Path, err = sp.ToDecoded()
-		if err != nil {
-			return err
+
+		// TODO(mawyss): remove, put to application logic
+		if p.Path.SupportsEpic() {
+			if err = p.Path.EnableEpic(); err != nil {
+				return err
+			}
+		}
+
+		if p.Path.EpicEnabled() {
+			// Convert to EPIC path type
+			ep := &epic.Path{
+				ScionPath: sp,
+			}
+			if addEpicPktID(ep, &p.Path.EpicData) != nil {
+				return err
+			}
+			if addEpicHVFs(ep, &p.Path.EpicData, &scionLayer) != nil {
+				return err
+			}
+
+			scionLayer.Path = ep
+			scionLayer.PathType = epic.PathType
+
+		} else {
+			// XXX this is for convenience when debugging with delve
+			scionLayer.Path, err = sp.ToDecoded()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -538,6 +609,46 @@ func (p *Packet) Serialize() error {
 	}
 	copy(p.Bytes, buffer.Bytes())
 	p.Bytes = p.Bytes[:len(buffer.Bytes())]
+	return nil
+}
+
+func addEpicPktID(ep *epic.Path, ed *spath.EpicData) error {
+	info, err := ep.ScionPath.GetInfoField(0)
+	if err != nil {
+		return err
+	}
+	tsInfo := time.Unix(int64(info.Timestamp), 0)
+	timestamp, err := libepic.CreateTimestamp(tsInfo, time.Now())
+	if err != nil {
+		return err
+	}
+	ep.PktID = epic.PktID{
+		Timestamp: timestamp,
+		Counter:   ed.Counter,
+	}
+
+	// Increase packet counter
+	ed.Counter = ed.Counter + 1
+	return nil
+}
+
+func addEpicHVFs(ep *epic.Path, ed *spath.EpicData, s *slayers.SCION) error {
+	info, err := ep.ScionPath.GetInfoField(0)
+	if err != nil {
+		return err
+	}
+
+	phvf, err := libepic.CalcMac(ed.AuthPHVF, ep.PktID, s, info.Timestamp)
+	if err != nil {
+		return err
+	}
+	lhvf, err := libepic.CalcMac(ed.AuthLHVF, ep.PktID, s, info.Timestamp)
+	if err != nil {
+		return err
+	}
+
+	ep.PHVF = phvf[:epic.HVFLen]
+	ep.LHVF = lhvf[:epic.HVFLen]
 	return nil
 }
 

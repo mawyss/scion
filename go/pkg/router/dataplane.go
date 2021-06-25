@@ -665,6 +665,7 @@ func (p *scionPacketProcessor) processSCION() (processResult, error) {
 
 func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 
+	log.Debug("Received EPIC packet!")
 	epicPath, ok := p.scionLayer.Path.(*epic.Path)
 	if !ok {
 		return processResult{}, malformedPath
@@ -675,10 +676,8 @@ func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 		return processResult{}, malformedPath
 	}
 
-	info, err := p.path.GetCurrentInfoField()
-	if err != nil {
-		return processResult{}, err
-	}
+	isPenultimate := p.path.IsPenultimateHop()
+	isLast := p.path.IsLastHop()
 
 	result, err := p.process()
 	if err != nil {
@@ -686,11 +685,13 @@ func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 		return processResult{}, err
 	}
 
-	isPenultimate := p.path.IsPenultimateHop()
-	isLast := p.path.IsLastHop()
-
 	if isPenultimate || isLast {
-		timestamp := time.Unix(int64(info.Timestamp), 0)
+		firstInfo, err := p.path.GetInfoField(0)
+		if err != nil {
+			return processResult{}, err
+		}
+
+		timestamp := time.Unix(int64(firstInfo.Timestamp), 0)
 		err = libepic.VerifyTimestamp(timestamp, epicPath.PktID.Timestamp, time.Now())
 		if err != nil {
 			// TODO(mawyss): Send back SCMP packet
@@ -701,7 +702,8 @@ func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 		if isLast {
 			HVF = epicPath.LHVF
 		}
-		err = libepic.VerifyHVF(p.cachedMac, epicPath.PktID, &p.scionLayer, info.Timestamp, HVF)
+		err = libepic.VerifyHVF(p.cachedMac, epicPath.PktID,
+			&p.scionLayer, firstInfo.Timestamp, HVF)
 		if err != nil {
 			// TODO(mawyss): Send back SCMP packet
 			return processResult{}, err

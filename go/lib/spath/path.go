@@ -24,8 +24,11 @@ import (
 	"time"
 
 	"github.com/scionproto/scion/go/lib/addr"
+	libepic "github.com/scionproto/scion/go/lib/epic"
+	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers/path"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
+	"github.com/scionproto/scion/go/lib/slayers/path/epic"
 	"github.com/scionproto/scion/go/lib/slayers/path/onehop"
 	"github.com/scionproto/scion/go/lib/slayers/path/scion"
 	"github.com/scionproto/scion/go/lib/util"
@@ -43,8 +46,16 @@ var (
 
 // Path is the raw dataplane path.
 type Path struct {
-	Raw  []byte
-	Type path.Type
+	Raw      []byte
+	Type     path.Type
+	EpicData EpicData
+}
+
+type EpicData struct {
+	enabled  bool
+	AuthPHVF []byte
+	AuthLHVF []byte
+	Counter  uint32
 }
 
 func NewOneHop(isd addr.ISD, ifID uint16, ts time.Time, exp uint8, hfmac hash.Hash) (Path, error) {
@@ -81,9 +92,32 @@ func (p Path) IsEmpty() bool {
 
 func (p Path) Copy() Path {
 	return Path{
-		Raw:  append(p.Raw[:0:0], p.Raw...),
-		Type: p.Type,
+		Raw:      append(p.Raw[:0:0], p.Raw...),
+		Type:     p.Type,
+		EpicData: p.EpicData,
 	}
+}
+
+func (p Path) SupportsEpic() bool {
+	if len(p.EpicData.AuthPHVF) != libepic.AuthLen {
+		return false
+	}
+	if len(p.EpicData.AuthLHVF) != libepic.AuthLen {
+		return false
+	}
+	return true
+}
+
+func (p Path) EpicEnabled() bool {
+	return p.EpicData.enabled
+}
+
+func (p *Path) EnableEpic() error {
+	if p.SupportsEpic() {
+		p.EpicData.enabled = true
+		return nil
+	}
+	return serrors.New("EPIC not supported")
 }
 
 func (p *Path) Reverse() error {
@@ -102,6 +136,17 @@ func (p *Path) Reverse() error {
 	if err != nil {
 		return err
 	}
+
+	// On the EPIC return path, use the SCION path type
+	if p.Type == epic.PathType {
+		e, ok := po.(*epic.Path)
+		if !ok {
+			return serrors.New("Path type and path data do not match")
+		}
+		po = e.GetScionPath()
+		p.EpicData.enabled = false
+	}
+
 	p.Type = po.Type()
 	l := po.Len()
 	if l > len(p.Raw) {

@@ -23,6 +23,7 @@ import (
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
+	// "github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/spath"
 )
 
@@ -54,6 +55,11 @@ type Path interface {
 	Metadata() *PathMetadata
 	// Copy create a copy of the path.
 	Copy() Path
+
+	// SupportsEpic returns whether the Path supports EPIC.
+	SupportsEpic() bool
+	// EnableEpic enables EPIC on this path.
+	EnableEpic() error
 }
 
 // PathInterface is an interface of the path.
@@ -114,12 +120,31 @@ type PathMetadata struct {
 	// Notes contains the notes added by ASes on the path, in the order of occurrence.
 	// Entry i is the note of AS i on the path.
 	Notes []string
+
+	// EpicAuths denotes the EPIC authenticators (if added during beaconing).
+	EpicAuths *EpicAuths
+}
+
+// EpicAuths is a containter for the authenticators used
+// in EPIC to calculate the PHVF and LHVF.
+type EpicAuths struct {
+	AuthPHVF []byte
+	AuthLHVF []byte
 }
 
 func (pm *PathMetadata) Copy() *PathMetadata {
 	if pm == nil {
 		return nil
 	}
+
+	var ea *EpicAuths = nil
+	if pm.EpicAuths != nil {
+		ea = &EpicAuths{
+			AuthPHVF: append(make([]byte, 0, len(pm.EpicAuths.AuthPHVF)), pm.EpicAuths.AuthPHVF...),
+			AuthLHVF: append(make([]byte, 0, len(pm.EpicAuths.AuthLHVF)), pm.EpicAuths.AuthLHVF...),
+		}
+	}
+
 	return &PathMetadata{
 		Interfaces:   append(pm.Interfaces[:0:0], pm.Interfaces...),
 		MTU:          pm.MTU,
@@ -130,6 +155,7 @@ func (pm *PathMetadata) Copy() *PathMetadata {
 		LinkType:     append(pm.LinkType[:0:0], pm.LinkType...),
 		InternalHops: append(pm.InternalHops[:0:0], pm.InternalHops...),
 		Notes:        append(pm.Notes[:0:0], pm.Notes...),
+		EpicAuths:    ea,
 	}
 }
 
@@ -235,5 +261,14 @@ func (p *partialPath) Copy() Path {
 }
 
 func (p *partialPath) String() string {
-	return fmt.Sprintf("{spath: %s, underlay: %s, dest: %s}", p.spath, p.underlay, p.destination)
+	return fmt.Sprintf("{spath: %s, underlay: %s, dest: %s}",
+		p.spath.String(), p.underlay, p.destination)
+}
+
+func (p *partialPath) SupportsEpic() bool {
+	return p.spath.SupportsEpic()
+}
+
+func (p *partialPath) EnableEpic() error {
+	return p.spath.EnableEpic()
 }

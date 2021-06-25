@@ -479,3 +479,11 @@ func (t *testPath) Metadata() *snet.PathMetadata {
 func (t *testPath) Copy() snet.Path {
 	panic("not implemented")
 }
+
+func (t *testPath) SupportsEpic() bool {
+	return false
+}
+
+func (t *testPath) EnableEpic() error {
+	panic("not implemented")
+}

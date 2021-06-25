@@ -123,6 +123,11 @@ func (p *Path) Type() path.Type {
 	return PathType
 }
 
+// GetScionPath returns the SCION path type header inside the EPIC path type header.
+func (p *Path) GetScionPath() *scion.Raw {
+	return p.ScionPath
+}
+
 // PktID denotes the EPIC packet ID.
 type PktID struct {
 	Timestamp uint32
