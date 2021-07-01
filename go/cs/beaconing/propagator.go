@@ -16,6 +16,7 @@ package beaconing
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -44,7 +45,7 @@ const (
 
 // BeaconProvider provides beacons to send to neighboring ASes.
 type BeaconProvider interface {
-	BeaconsToPropagate(ctx context.Context) ([]beacon.BeaconOrErr, error)
+	BeaconsToPropagate(ctx context.Context) ([]beacon.Beacon, error)
 }
 
 var _ periodic.Task = (*Propagator)(nil)
@@ -54,14 +55,14 @@ var _ periodic.Task = (*Propagator)(nil)
 // forwarded on child links. Selection of the beacons is handled by the beacon
 // provider, the propagator only filters AS loops.
 type Propagator struct {
-	Extender     Extender
-	BeaconSender BeaconSender
-	Provider     BeaconProvider
-	IA           addr.IA
-	Signer       seg.Signer
-	Intfs        *ifstate.Interfaces
-	Core         bool
-	AllowIsdLoop bool
+	Extender              Extender
+	SenderFactory         SenderFactory
+	Provider              BeaconProvider
+	IA                    addr.IA
+	Signer                seg.Signer
+	AllInterfaces         *ifstate.Interfaces
+	PropagationInterfaces func() []*ifstate.Interface
+	AllowIsdLoop          bool
 
 	Propagated     metrics.Counter
 	InternalErrors metrics.Counter
@@ -81,86 +82,63 @@ func (p *Propagator) Name() string {
 // interfaces.
 func (p *Propagator) Run(ctx context.Context) {
 	p.Tick.SetNow(time.Now())
-	if err := p.run(ctx); err != nil {
-		log.FromCtx(ctx).Error("Unable to propagate beacons", "err", err)
+	logger := log.FromCtx(ctx)
+	if err := p.run(ctx, logger); err != nil {
+		logger.Error("Unable to propagate beacons", "err", err)
 	}
 	p.Tick.UpdateLast()
 }
 
-func (p *Propagator) run(ctx context.Context) error {
-	logger := log.FromCtx(ctx)
+func (p *Propagator) run(ctx context.Context, logger log.Logger) error {
 	intfs := p.needsBeacons(logger)
 	if len(intfs) == 0 {
 		return nil
 	}
-	peers := sortedIntfs(p.Intfs, topology.Peer)
+	peers := sortedIntfs(p.AllInterfaces, topology.Peer)
 	beacons, err := p.Provider.BeaconsToPropagate(ctx)
 	if err != nil {
 		p.incrementInternalErrors()
 		return err
 	}
-	s := newSummary()
-	var wg sync.WaitGroup
-	for _, bOrErr := range beacons {
-		if bOrErr.Err != nil {
-			logger.Error("Unable to get beacon", "err", bOrErr.Err)
-			p.incrementInternalErrors()
+	var toPropagate []beacon.Beacon
+	for _, b := range beacons {
+		if p.AllInterfaces.Get(b.InIfId) == nil {
 			continue
 		}
-		if p.Intfs.Get(bOrErr.Beacon.InIfId) == nil {
-			continue
-		}
-		b := beaconPropagator{
-			Propagator: p,
-			beacon:     bOrErr.Beacon,
-			intfs:      intfs,
-			peers:      peers,
-			summary:    s,
-			logger:     logger,
-		}
-		b.start(ctx, &wg)
+		toPropagate = append(toPropagate, b)
 	}
-	wg.Wait()
-	p.logSummary(logger, s)
+	b := propagator{
+		Propagator: p,
+		beacons:    toPropagate,
+		intfs:      intfs,
+		peers:      peers,
+		logger:     logger,
+	}
+	if err := b.propagate(ctx); err != nil {
+		return serrors.WrapStr("error propagating", err, "beacons", b.beacons)
+	}
 	return nil
 }
 
-// needsBeacons returns a list of active interface ids that beacons should be
-// propagated to. In a core AS, these are all active core links. In a non-core
+// needsBeacons returns a list of active interfaces that beacons should be
+// propagated on. In a core AS, these are all active core links. In a non-core
 // AS, these are all active child links.
-func (p *Propagator) needsBeacons(logger log.Logger) []common.IFIDType {
-	var intfs []common.IFIDType
-	if p.Core {
-		intfs = sortedIntfs(p.Intfs, topology.Core)
-	} else {
-		intfs = sortedIntfs(p.Intfs, topology.Child)
-	}
+func (p *Propagator) needsBeacons(logger log.Logger) []*ifstate.Interface {
+	intfs := p.PropagationInterfaces()
+	sort.Slice(intfs, func(i, j int) bool {
+		return intfs[i].TopoInfo().ID < intfs[j].TopoInfo().ID
+	})
+
 	if p.Tick.Passed() {
 		return intfs
 	}
-	stale := make([]common.IFIDType, 0, len(intfs))
-	for _, ifid := range intfs {
-		intf := p.Intfs.Get(ifid)
-		if intf == nil {
-			continue
-		}
+	stale := make([]*ifstate.Interface, 0, len(intfs))
+	for _, intf := range intfs {
 		if p.Tick.Overdue(intf.LastPropagate()) {
-			stale = append(stale, ifid)
+			stale = append(stale, intf)
 		}
 	}
 	return stale
-}
-
-func (p *Propagator) logSummary(logger log.Logger, s *summary) {
-	if p.Tick.Passed() {
-		logger.Debug("Propagated beacons",
-			"count", s.count, "start_isd_ases", len(s.srcs), "egress_interfaces", s.IfIds())
-		return
-	}
-	if s.count > 0 {
-		logger.Debug("Propagated beacons on stale interfaces",
-			"count", s.count, "start_isd_ases", len(s.srcs), "egress_interfaces", s.IfIds())
-	}
 }
 
 func (p *Propagator) incrementInternalErrors() {
@@ -170,48 +148,38 @@ func (p *Propagator) incrementInternalErrors() {
 	p.InternalErrors.Add(1)
 }
 
-// beaconPropagator propagates one beacon to all active interfaces.
-type beaconPropagator struct {
+// propagator propagates a set of beacons on all active interfaces.
+type propagator struct {
 	*Propagator
 	wg      sync.WaitGroup
-	beacon  beacon.Beacon
-	intfs   []common.IFIDType
+	beacons []beacon.Beacon
+	intfs   []*ifstate.Interface
 	peers   []common.IFIDType
 	success ctr
-	summary *summary
 	logger  log.Logger
 }
 
-// start adds to the wait group and starts propagation of the beacon on
-// all active interfaces.
-func (p *beaconPropagator) start(ctx context.Context, wg *sync.WaitGroup) {
-	wg.Add(1)
-	go func() {
-		defer log.HandlePanic()
-		defer wg.Done()
-		if err := p.propagate(ctx); err != nil {
-			p.logger.Error("Unable to propagate", "beacon", p.beacon, "err", err)
-			return
-		}
-	}()
-}
-
-func (p *beaconPropagator) propagate(ctx context.Context) error {
-	pb := seg.PathSegmentToPB(p.beacon.Segment)
+// propagate propagates beacons on all active interfaces.
+func (p *propagator) propagate(ctx context.Context) error {
 	var expected int
-	for _, egIfid := range p.intfs {
-		if p.shouldIgnore(p.beacon, egIfid) {
-			continue
+	for _, intf := range p.intfs {
+		var toPropagate []beacon.Beacon
+		for _, b := range p.beacons {
+			if p.shouldIgnore(b, intf) {
+				continue
+			}
+			expected++
+			// Create a "copy" from the original beacon to avoid races on the
+			// ASEntry slice.
+			ps, err := seg.BeaconFromPB(seg.PathSegmentToPB(b.Segment))
+			if err != nil {
+				p.Propagator.incrementInternalErrors()
+				p.logger.Debug("Unable to unpack beacon", "err", err)
+				continue
+			}
+			toPropagate = append(toPropagate, beacon.Beacon{Segment: ps, InIfId: b.InIfId})
 		}
-		expected++
-		// Create a "copy" from the original beacon to avoid races on the
-		// ASEntry slice.
-		ps, err := seg.BeaconFromPB(pb)
-		if err != nil {
-			p.Propagator.incrementInternalErrors()
-			return serrors.WrapStr("Unable to unpack beacon", err)
-		}
-		p.extendAndSend(ctx, beacon.Beacon{Segment: ps, InIfId: p.beacon.InIfId}, egIfid)
+		p.extendAndSend(ctx, toPropagate, intf)
 	}
 	p.wg.Wait()
 	if expected == 0 {
@@ -220,111 +188,108 @@ func (p *beaconPropagator) propagate(ctx context.Context) error {
 	if p.success.c <= 0 {
 		return serrors.New("no beacon propagated", "expected", expected)
 	}
-	p.summary.AddSrc(p.beacon.Segment.FirstIA())
-	p.summary.Inc()
-	p.logger.Debug("Successfully propagated", "beacon", p.beacon,
+	p.logger.Debug("Successfully propagated", "beacons", p.beacons, "interfaces", p.intfs,
 		"expected", expected, "count", p.success.c)
 	return nil
 }
 
 // extendAndSend extends the path segment with the AS entry and sends it on the
 // egress interface, all done in a goroutine to avoid head-of-line blocking.
-func (p *beaconPropagator) extendAndSend(ctx context.Context, bseg beacon.Beacon,
-	egIfid common.IFIDType) {
-
+func (p *propagator) extendAndSend(
+	ctx context.Context,
+	bsegs []beacon.Beacon,
+	intf *ifstate.Interface,
+) {
+	if len(bsegs) == 0 {
+		return
+	}
+	egIfid := intf.TopoInfo().ID
 	p.wg.Add(1)
 	go func() {
 		defer log.HandlePanic()
 		defer p.wg.Done()
 
-		labels := propagatorLabels{
-			StartIA: bseg.Segment.FirstIA(),
-			Ingress: bseg.InIfId,
-			Egress:  egIfid,
-		}
-
-		if err := p.Extender.Extend(ctx, bseg.Segment, bseg.InIfId, egIfid, p.peers); err != nil {
-			p.logger.Error("Unable to extend beacon", "beacon", bseg, "err", err)
-			p.incrementMetrics(labels.WithResult("err_create"))
-			return
-		}
-		intf := p.Intfs.Get(egIfid)
-		if intf == nil {
-			p.logger.Error("Interface removed", "egress_interface", egIfid)
-			p.incrementMetrics(labels.WithResult(prom.ErrValidate))
-			return
+		var toPropagate []beacon.Beacon
+		for _, bseg := range bsegs {
+			err := p.Extender.Extend(ctx, bseg.Segment, bseg.InIfId, egIfid, p.peers)
+			if err != nil {
+				p.logger.Error("Unable to extend beacon", "beacon", bseg, "err", err)
+				p.incMetric(bseg.Segment.FirstIA(), bseg.InIfId, egIfid, "err_create")
+				continue
+			}
+			toPropagate = append(toPropagate, bseg)
 		}
 		topoInfo := intf.TopoInfo()
 
 		rpcContext, cancelF := context.WithTimeout(ctx, DefaultRPCTimeout)
 		defer cancelF()
-		rpcStart := time.Now()
 
-		err := p.BeaconSender.Send(
-			rpcContext,
-			bseg.Segment,
-			topoInfo.IA,
-			egIfid,
-			topoInfo.InternalAddr,
-		)
+		rpcStart := time.Now()
+		sender, err := p.SenderFactory.NewSender(rpcContext, topoInfo.IA, uint16(egIfid),
+			topoInfo.InternalAddr)
 		if err != nil {
 			if rpcContext.Err() != nil {
-				err = serrors.WrapStr("timed out waiting for RPC to complete", err,
+				err = serrors.WrapStr("timed out getting beacon sender", err,
 					"waited_for", time.Since(rpcStart))
 			}
-			p.logger.Info("Unable to send packet", "egress_interface", egIfid, "err", err)
-			p.incrementMetrics(labels.WithResult(prom.ErrNetwork))
+			p.logger.Info("Unable to propagate beacons", "egress_interface", egIfid, "err", err)
+			for _, b := range toPropagate {
+				p.incMetric(b.Segment.FirstIA(), b.InIfId, egIfid, prom.ErrNetwork)
+			}
 			return
 		}
-		p.onSuccess(intf, egIfid)
-		p.incrementMetrics(labels.WithResult(prom.Success))
+		defer sender.Close()
+
+		successes := 0
+		for _, b := range toPropagate {
+			if err := sender.Send(rpcContext, b.Segment); err != nil {
+				if rpcContext.Err() != nil {
+					err = serrors.WrapStr("timed out waiting for RPC to complete", err,
+						"waited_for", time.Since(rpcStart))
+					p.logger.Info("Unable to propagate beacons", "egress_interface", egIfid,
+						"err", err)
+					p.incMetric(b.Segment.FirstIA(), b.InIfId, egIfid, prom.ErrNetwork)
+					// Return here if the context is expired, since no RPC will complete at that
+					// point.
+					return
+				}
+				p.logger.Info("Unable to propagate beacons", "egress_interface", egIfid, "err", err)
+				p.incMetric(b.Segment.FirstIA(), b.InIfId, egIfid, prom.ErrNetwork)
+				continue
+			}
+			p.onSuccess(intf, egIfid)
+			p.incMetric(b.Segment.FirstIA(), b.InIfId, egIfid, prom.Success)
+			successes++
+		}
+		p.logger.Debug("Propagated beacons", "egress_interface", egIfid, "expected",
+			len(toPropagate), "successes", successes)
 	}()
 }
 
 // shouldIgnore indicates whether a beacon should not be sent on the egress
 // interface because it creates a loop.
-func (p *beaconPropagator) shouldIgnore(bseg beacon.Beacon, egIfid common.IFIDType) bool {
-	intf := p.Intfs.Get(egIfid)
-	if intf == nil {
-		return true
-	}
+func (p *propagator) shouldIgnore(bseg beacon.Beacon, intf *ifstate.Interface) bool {
 	if err := beacon.FilterLoop(bseg, intf.TopoInfo().IA, p.AllowIsdLoop); err != nil {
-		p.logger.Debug("Ignoring beacon on loop", "egress_interface", egIfid, "err", err)
+		p.logger.Debug("Ignoring beacon on loop", "egress_interface",
+			intf.TopoInfo().ID, "err", err)
 		return true
 	}
 	return false
 }
 
-func (p *beaconPropagator) onSuccess(intf *ifstate.Interface, egIfid common.IFIDType) {
+func (p *propagator) onSuccess(intf *ifstate.Interface, egIfid common.IFIDType) {
 	intf.Propagate(p.Tick.Now())
 	p.success.Inc()
-	p.summary.AddIfid(egIfid)
 }
 
-func (p *beaconPropagator) incrementMetrics(labels propagatorLabels) {
+func (p *propagator) incMetric(startIA addr.IA, ingress, egress common.IFIDType, result string) {
 	if p.Propagator.Propagated == nil {
 		return
 	}
-	p.Propagator.Propagated.With(labels.Expand()...).Add(1)
-}
-
-type propagatorLabels struct {
-	StartIA addr.IA
-	Egress  common.IFIDType
-	Ingress common.IFIDType
-	Result  string
-}
-
-func (l propagatorLabels) Expand() []string {
-	return []string{
-		"start_isd_as", l.StartIA.String(),
-		"ingress_interface", strconv.Itoa(int(l.Ingress)),
-		"egress_interface", strconv.Itoa(int(l.Egress)),
-		prom.LabelResult, l.Result,
-	}
-}
-
-func (l propagatorLabels) WithResult(result string) propagatorLabels {
-	l.Result = result
-	return l
+	p.Propagator.Propagated.With(
+		"start_isd_as", startIA.String(),
+		"ingress_interface", strconv.Itoa(int(ingress)),
+		"egress_interface", strconv.Itoa(int(egress)),
+		prom.LabelResult, result,
+	).Add(1)
 }

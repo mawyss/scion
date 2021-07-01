@@ -18,7 +18,6 @@ import (
 	"net"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
@@ -44,10 +43,8 @@ type UDPPayload struct {
 func (m UDPPayload) toLayers(scn *slayers.SCION) []gopacket.SerializableLayer {
 	scn.NextHdr = common.L4UDP
 	udp := slayers.UDP{
-		UDP: layers.UDP{
-			SrcPort: layers.UDPPort(m.SrcPort),
-			DstPort: layers.UDPPort(m.DstPort),
-		},
+		SrcPort: m.SrcPort,
+		DstPort: m.DstPort,
 	}
 	udp.SetNetworkLayerForChecksum(scn)
 	return []gopacket.SerializableLayer{&udp, gopacket.Payload(m.Payload)}
@@ -295,14 +292,16 @@ type Packet struct {
 func (p *Packet) Decode() error {
 	var (
 		scionLayer slayers.SCION
+		hbhLayer   slayers.HopByHopExtnSkipper
+		e2eLayer   slayers.EndToEndExtnSkipper
 		udpLayer   slayers.UDP
 		scmpLayer  slayers.SCMP
 	)
 	parser := gopacket.NewDecodingLayerParser(
-		slayers.LayerTypeSCION, &scionLayer, &udpLayer, &scmpLayer,
+		slayers.LayerTypeSCION, &scionLayer, &hbhLayer, &e2eLayer, &udpLayer, &scmpLayer,
 	)
 	parser.IgnoreUnsupported = true
-	decoded := make([]gopacket.LayerType, 3)
+	decoded := make([]gopacket.LayerType, 0, 4)
 	if err := parser.DecodeLayers(p.Bytes, &decoded); err != nil {
 		return err
 	}

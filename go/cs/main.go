@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
@@ -46,14 +48,12 @@ import (
 	"github.com/scionproto/scion/go/lib/infra/modules/seghandler"
 	"github.com/scionproto/scion/go/lib/log"
 	libmetrics "github.com/scionproto/scion/go/lib/metrics"
-	"github.com/scionproto/scion/go/lib/pathdb"
 	"github.com/scionproto/scion/go/lib/periodic"
 	"github.com/scionproto/scion/go/lib/prom"
 	"github.com/scionproto/scion/go/lib/scrypto"
 	"github.com/scionproto/scion/go/lib/scrypto/cppki"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/snet"
-	"github.com/scionproto/scion/go/lib/sock/reliable"
 	"github.com/scionproto/scion/go/lib/topology"
 	"github.com/scionproto/scion/go/pkg/api/jwtauth"
 	"github.com/scionproto/scion/go/pkg/app/launcher"
@@ -73,6 +73,7 @@ import (
 	"github.com/scionproto/scion/go/pkg/service"
 	"github.com/scionproto/scion/go/pkg/storage"
 	beaconstoragemetrics "github.com/scionproto/scion/go/pkg/storage/beacon/metrics"
+	pathstoragemetrics "github.com/scionproto/scion/go/pkg/storage/path/metrics"
 	truststoragefspersister "github.com/scionproto/scion/go/pkg/storage/trust/fspersister"
 	truststoragemetrics "github.com/scionproto/scion/go/pkg/storage/trust/metrics"
 	"github.com/scionproto/scion/go/pkg/trust"
@@ -115,8 +116,15 @@ func realMain() error {
 	if err != nil {
 		return serrors.WrapStr("initializing path storage", err)
 	}
-	pathDB = pathdb.WithMetrics(string(storage.BackendSqlite), pathDB)
+	pathDB = pathstoragemetrics.WrapDB(pathDB, pathstoragemetrics.Config{
+		Driver: string(storage.BackendSqlite),
+	})
 	defer pathDB.Close()
+
+	macGen, err := cs.MACGenFactory(globalCfg.General.ConfigDir)
+	if err != nil {
+		return err
+	}
 
 	nc := infraenv.NetworkConfig{
 		IA:                    topo.IA(),
@@ -140,8 +148,11 @@ func realMain() error {
 		return serrors.WrapStr("initializing TCP stack", err)
 	}
 	dialer := &libgrpc.QUICDialer{
-		Rewriter: nc.AddressRewriter(nil),
-		Dialer:   quicStack.Dialer,
+		Rewriter: &onehop.AddressRewriter{
+			Rewriter: nc.AddressRewriter(nil),
+			MAC:      macGen(),
+		},
+		Dialer: quicStack.Dialer,
 	}
 
 	trustDB, err := storage.NewTrustStorage(globalCfg.TrustDB)
@@ -454,8 +465,8 @@ func realMain() error {
 	trcRunner.TriggerRun()
 
 	ds := discovery.Topology{
-		Provider: itopo.Provider(),
-		Requests: libmetrics.NewPromCounter(metrics.DiscoveryRequestsTotal),
+		Information: topoInformation{},
+		Requests:    libmetrics.NewPromCounter(metrics.DiscoveryRequestsTotal),
 	}
 	dpb.RegisterDiscoveryServiceServer(quicServer, ds)
 
@@ -500,9 +511,9 @@ func realMain() error {
 		server := api.Server{
 			Segments: pathDB,
 			CA:       chainBuilder,
-			Config:   service.NewConfigHandler(globalCfg),
-			Info:     service.NewInfoHandler(),
-			LogLevel: log.ConsoleLevel.ServeHTTP,
+			Config:   service.NewConfigStatusPage(globalCfg).Handler,
+			Info:     service.NewInfoStatusPage().Handler,
+			LogLevel: service.NewLogLevelStatusPage().Handler,
 			Signer:   signer,
 			Topology: itopo.TopologyHandler,
 			TrustDB:  trustDB,
@@ -521,49 +532,48 @@ func realMain() error {
 	if err != nil {
 		return serrors.WrapStr("registering status pages", err)
 	}
-	ohpConn, err := cs.NewOneHopConn(topo.IA(), nc.Public, "",
-		globalCfg.General.ReconnectToDispatcher)
-	if err != nil {
-		return serrors.WrapStr("creating one-hop connection", err)
-	}
-	macGen, err := cs.MACGenFactory(globalCfg.General.ConfigDir)
-	if err != nil {
-		return err
-	}
 	staticInfo, err := beaconing.ParseStaticInfoCfg(globalCfg.General.StaticInfoConfig())
 	if err != nil {
 		log.Info("No static info file found. Static info settings disabled.", "err", err)
 	}
 
-	addressRewriter := nc.AddressRewriter(
-		&onehop.OHPPacketDispatcherService{
-			PacketDispatcherService: &snet.DefaultPacketDispatcherService{
-				Dispatcher: reliable.NewDispatcher(""),
-			},
-		},
-	)
+	var propagationFilter func(intf *ifstate.Interface) bool
+	if topo.Core() {
+		propagationFilter = func(intf *ifstate.Interface) bool {
+			topoInfo := intf.TopoInfo()
+			return topoInfo.LinkType == topology.Core
+		}
+	} else {
+		propagationFilter = func(intf *ifstate.Interface) bool {
+			topoInfo := intf.TopoInfo()
+			return topoInfo.LinkType == topology.Child
+		}
+	}
+
+	var originationFilter func(intf *ifstate.Interface) bool
+	originationFilter = func(intf *ifstate.Interface) bool {
+		topoInfo := intf.TopoInfo()
+		return topoInfo.LinkType == topology.Core || topoInfo.LinkType == topology.Child
+	}
+
 	tasks, err := cs.StartTasks(cs.TasksConfig{
-		Public:   nc.Public,
-		Intfs:    intfs,
+		Public:        nc.Public,
+		AllInterfaces: intfs,
+		PropagationInterfaces: func() []*ifstate.Interface {
+			return intfs.Filtered(propagationFilter)
+		},
+		OriginationInterfaces: func() []*ifstate.Interface {
+			return intfs.Filtered(originationFilter)
+		},
 		TrustDB:  trustDB,
 		PathDB:   pathDB,
 		RevCache: revCache,
-		BeaconSender: &onehop.BeaconSender{
-			Sender: onehop.Sender{
-				Conn: ohpConn,
-				IA:   topo.IA(),
-				MAC:  macGen(),
-				Addr: nc.Public,
-			},
-			AddressRewriter: addressRewriter,
-			RPC: beaconinggrpc.BeaconSender{
-				Dialer: dialer,
-			},
+		BeaconSenderFactory: &beaconinggrpc.BeaconSenderFactory{
+			Dialer: dialer,
 		},
 		SegmentRegister: beaconinggrpc.Registrar{Dialer: dialer},
 		BeaconStore:     beaconStore,
 		Signer:          signer,
-		OneHopConn:      ohpConn,
 		Inspector:       inspector,
 		Metrics:         metrics,
 		MACGen:          macGen,
@@ -634,4 +644,26 @@ func createBeaconStore(
 	}
 	store, err := beacon.NewBeaconStore(policies, db)
 	return store, *policies.Prop.Filter.AllowIsdLoop, err
+}
+
+type topoInformation struct{}
+
+func (topoInformation) Gateways() ([]topology.GatewayInfo, error) {
+	return itopo.Get().Gateways()
+}
+
+func (topoInformation) HiddenSegmentLookupAddresses() ([]*net.UDPAddr, error) {
+	a, err := itopo.Get().MakeHostInfos(topology.HiddenSegmentLookup)
+	if errors.Is(err, topology.ErrAddressNotFound) {
+		return nil, nil
+	}
+	return a, err
+}
+
+func (topoInformation) HiddenSegmentRegistrationAddresses() ([]*net.UDPAddr, error) {
+	a, err := itopo.Get().MakeHostInfos(topology.HiddenSegmentRegistration)
+	if errors.Is(err, topology.ErrAddressNotFound) {
+		return nil, nil
+	}
+	return a, err
 }

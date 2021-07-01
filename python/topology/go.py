@@ -49,9 +49,6 @@ from python.topology.prometheus import (
 )
 from python.topology.topo import DEFAULT_LINK_BW
 
-CS_QUIC_PORT = 30352
-CO_QUIC_PORT = 30357
-
 
 class GoGenArgs(ArgsTopoDicts):
     def __init__(self, args, topo_dicts, networks: Mapping[IPNetwork, NetworkDescription]):
@@ -126,10 +123,6 @@ class GoGenerator(object):
             'metrics': self._metrics_entry(infra_elem, CS_PROM_PORT),
             'features': translate_features(self.args.features),
         }
-        if ca:
-            raw_entry['renewal_db'] = {
-                'connection': os.path.join(self.db_dir, '%s.renewal.db' % name),
-            }
         return raw_entry
 
     def generate_co(self):

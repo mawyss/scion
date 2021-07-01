@@ -43,8 +43,8 @@ decoding. The following can be used to decode any SCION packet (including HBH an
 that have either a SCION/UDP or SCMP payload:
 
 	var scn slayers.SCION
-	var hbh slayers.HopByHopExtn
-	var e2e slayers.EndToEndExtn
+	var hbh slayers.HopByHopExtnSkipper
+	var e2e slayers.EndToEndExtnSkipper
 	var udp slayers.UDP
 	var scmp slayers.SCMP
 	var pld gopacket.Payload
@@ -64,6 +64,9 @@ even branching based on layer type... it'll handle an (scn, e2e, udp) or (scn, h
 Note: Great care has been taken to only lazily parse the SCION header, however, HBH and E2E
 extensions are currently eagerly parsed (if they exist). Thus, handling packets containing these
 extensions will be much slower (see the package benchmarks for reference).
+When using the DecodingLayerParser, the extensions can be explicitly skipped by using the
+HopByHop/EndToEndExtnSkipper layer. The content of this Skipper-layer can be decoded into the full
+representation when necessary.
 
 Creating Packet Data
 
@@ -80,6 +83,17 @@ Packet data can be created by instantiating the various slayers.* types. To gene
 		// Handle error
 	}
 	packedData := buf.Bytes()
+
+BFD and gopacket/layers
+
+slayers does intentionally not import gopacket/layers, as this contains a
+considerable amount of bloat in the form of layer types that are never used by
+most users of the slayers package.
+At the same time, the slayers.SCION layer supports parsing SCION/BFD packets
+using the gopacket/layers.BFD layer type. Applications that want to parse
+SCION/BFD packets need to ensure that gopacket/layers is imported somewhere in
+the application so that the corresponding layer decoder is registered. Note
+that this is naturally ensured when using the DecodingLayer style.
 
 */
 package slayers

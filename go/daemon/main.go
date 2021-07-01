@@ -53,6 +53,7 @@ import (
 	sdpb "github.com/scionproto/scion/go/pkg/proto/daemon"
 	"github.com/scionproto/scion/go/pkg/service"
 	"github.com/scionproto/scion/go/pkg/storage"
+	pathstoragemetrics "github.com/scionproto/scion/go/pkg/storage/path/metrics"
 	truststoragemetrics "github.com/scionproto/scion/go/pkg/storage/trust/metrics"
 	"github.com/scionproto/scion/go/pkg/trust"
 	"github.com/scionproto/scion/go/pkg/trust/compat"
@@ -86,7 +87,9 @@ func realMain() error {
 	if err != nil {
 		return serrors.WrapStr("initializing path storage", err)
 	}
-	pathDB = pathdb.WithMetrics(string(storage.BackendSqlite), pathDB)
+	pathDB = pathstoragemetrics.WrapDB(pathDB, pathstoragemetrics.Config{
+		Driver: string(storage.BackendSqlite),
+	})
 	defer pathDB.Close()
 	defer revCache.Close()
 	cleaner := periodic.Start(pathdb.NewCleaner(pathDB, "sd_segments"),
@@ -198,10 +201,10 @@ func realMain() error {
 
 	// Start HTTP endpoints.
 	statusPages := service.StatusPages{
-		"info":      service.NewInfoHandler(),
-		"config":    service.NewConfigHandler(globalCfg),
-		"topology":  itopo.TopologyHandler,
-		"log/level": log.ConsoleLevel.ServeHTTP,
+		"info":      service.NewInfoStatusPage(),
+		"config":    service.NewConfigStatusPage(globalCfg),
+		"log/level": service.NewLogLevelStatusPage(),
+		"topology":  service.StatusPage{Handler: itopo.TopologyHandler},
 	}
 	if err := statusPages.Register(http.DefaultServeMux, globalCfg.General.ID); err != nil {
 		return serrors.WrapStr("registering status pages", err)

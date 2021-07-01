@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
@@ -94,7 +93,7 @@ type resolverTest struct {
 	Reqs              segfetcher.Requests
 	Refresh           bool
 	Segs              segfetcher.Segments
-	ExpectCalls       func(db *mock_pathdb.MockPathDB)
+	ExpectCalls       func(db *mock_pathdb.MockDB)
 	ExpectRevcache    func(t *testing.T, revCache *mock_revcache.MockRevCache)
 	ExpectedSegments  segfetcher.Segments
 	ExpectedFetchReqs segfetcher.Requests
@@ -104,7 +103,7 @@ func (rt resolverTest) run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	db := mock_pathdb.NewMockPathDB(ctrl)
+	db := mock_pathdb.NewMockDB(ctrl)
 	rt.ExpectCalls(db)
 	revCache := mock_revcache.NewMockRevCache(ctrl)
 	if rt.ExpectRevcache != nil {
@@ -130,10 +129,10 @@ func TestResolver(t *testing.T) {
 			Reqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// no cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any())
+					gomock.Eq(isd1))
 			},
 			ExpectedFetchReqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
@@ -143,10 +142,10 @@ func TestResolver(t *testing.T) {
 			Reqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(isd1)).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
@@ -163,13 +162,13 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
 				segfetcher.Request{SegType: Core, Src: isd1, Dst: core_110},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// no cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any())
+					gomock.Eq(isd1))
 				// no cached core segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(isd1),
-					gomock.Eq(core_110), gomock.Any())
+					gomock.Eq(core_110))
 			},
 			ExpectedFetchReqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
@@ -182,19 +181,19 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: core_120, Dst: core_110},
 				segfetcher.Request{SegType: Core, Src: core_130, Dst: core_110},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(isd1)).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
 				})).Return(resultsFromSegs(tg.seg120_111_up, tg.seg130_111_up), nil)
 				// no cached core segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(core_120),
-					gomock.Eq(core_110), gomock.Any())
+					gomock.Eq(core_110))
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(core_130),
-					gomock.Eq(core_110), gomock.Any())
+					gomock.Eq(core_110))
 			},
 			ExpectedSegments: segfetcher.Segments{tg.seg120_111_up, tg.seg130_111_up},
 			ExpectedFetchReqs: segfetcher.Requests{
@@ -208,19 +207,19 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: core_120, Dst: core_110},
 				segfetcher.Request{SegType: Core, Src: core_130, Dst: core_110},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(isd1)).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
 				})).Return(resultsFromSegs(tg.seg120_111_up, tg.seg130_111_up), nil)
 				// cached core segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(core_120),
-					gomock.Eq(core_110), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(core_110)).Return(futureT, nil)
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(core_130),
-					gomock.Eq(core_110), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(core_110)).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeCore},
 					StartsAt: []addr.IA{core_110}, EndsAt: []addr.IA{core_120},
@@ -240,10 +239,10 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: isd2, Dst: isd2},
 				segfetcher.Request{SegType: Down, Src: isd2, Dst: non_core_212},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
-				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2, gomock.Any())
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd2, gomock.Any())
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_212, gomock.Any())
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
+				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2)
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd2)
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_212)
 			},
 			ExpectedFetchReqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_211, Dst: isd2},
@@ -257,12 +256,12 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: isd2, Dst: isd2},
 				segfetcher.Request{SegType: Down, Src: isd2, Dst: non_core_212},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
-				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2, gomock.Any()).
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
+				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2).
 					Return(futureT, nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd2, gomock.Any()).
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd2).
 					Return(futureT, nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_212, gomock.Any()).
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_212).
 					Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
@@ -286,11 +285,11 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: isd1, Dst: isd2},
 				segfetcher.Request{SegType: Down, Src: isd2, Dst: non_core_211},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// no cached segments
-				db.EXPECT().GetNextQuery(gomock.Any(), non_core_111, isd1, gomock.Any())
-				db.EXPECT().GetNextQuery(gomock.Any(), isd1, isd2, gomock.Any())
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_211, gomock.Any())
+				db.EXPECT().GetNextQuery(gomock.Any(), non_core_111, isd1)
+				db.EXPECT().GetNextQuery(gomock.Any(), isd1, isd2)
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_211)
 			},
 			ExpectedFetchReqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
@@ -304,16 +303,16 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: isd1, Dst: isd2},
 				segfetcher.Request{SegType: Down, Src: isd2, Dst: non_core_211},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
-				db.EXPECT().GetNextQuery(gomock.Any(), non_core_111, isd1, gomock.Any()).
+				db.EXPECT().GetNextQuery(gomock.Any(), non_core_111, isd1).
 					Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
 				})).Return(resultsFromSegs(tg.seg120_111_up, tg.seg130_111_up), nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), isd1, isd2, gomock.Any())
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_211, gomock.Any())
+				db.EXPECT().GetNextQuery(gomock.Any(), isd1, isd2)
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, non_core_211)
 			},
 			ExpectedSegments: segfetcher.Segments{tg.seg120_111_up, tg.seg130_111_up},
 			ExpectedFetchReqs: segfetcher.Requests{
@@ -327,21 +326,21 @@ func TestResolver(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: isd2, Dst: isd1},
 				segfetcher.Request{SegType: Down, Src: isd1, Dst: non_core_111},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
-				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2, gomock.Any()).
+				db.EXPECT().GetNextQuery(gomock.Any(), non_core_211, isd2).
 					Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd2}, EndsAt: []addr.IA{non_core_211},
 				})).Return(resultsFromSegs(tg.seg210_211_up), nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), isd1, non_core_111, gomock.Any()).
+				db.EXPECT().GetNextQuery(gomock.Any(), isd1, non_core_111).
 					Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeDown},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
 				})).Return(resultsFromSegs(tg.seg120_111_down, tg.seg130_111_down), nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd1, gomock.Any())
+				db.EXPECT().GetNextQuery(gomock.Any(), isd2, isd1)
 			},
 			ExpectedSegments: segfetcher.Segments{tg.seg210_211_up,
 				tg.seg120_111_down, tg.seg130_111_down},
@@ -369,7 +368,7 @@ func TestResolverCacheBypass(t *testing.T) {
 				segfetcher.Request{SegType: Down, Src: isd1, Dst: non_core_111},
 			},
 			Refresh:          true,
-			ExpectCalls:      func(db *mock_pathdb.MockPathDB) {},
+			ExpectCalls:      func(db *mock_pathdb.MockDB) {},
 			ExpectedSegments: nil,
 			ExpectedFetchReqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_211, Dst: isd2},
@@ -391,20 +390,19 @@ func TestResolverWithRevocations(t *testing.T) {
 
 	revoke := func(t *testing.T, revCache *mock_revcache.MockRevCache, key revcache.Key) {
 		ksMatcher := keySetContains{keys: []revcache.Key{key}}
-		srev, err := path_mgmt.NewSignedRevInfo(&path_mgmt.RevInfo{})
-		require.NoError(t, err)
+		rev := &path_mgmt.RevInfo{}
 		revCache.EXPECT().Get(gomock.Any(), ksMatcher).
-			Return(revcache.Revocations{key: srev}, nil)
+			Return(revcache.Revocations{key: rev}, nil)
 	}
 	tests := map[string]resolverTest{
 		"Up wildcard (cached)": {
 			Reqs: segfetcher.Requests{
 				segfetcher.Request{SegType: Up, Src: non_core_111, Dst: isd1},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
 				// cached up segments
 				db.EXPECT().GetNextQuery(gomock.Any(), gomock.Eq(non_core_111),
-					gomock.Eq(isd1), gomock.Any()).Return(futureT, nil)
+					gomock.Eq(isd1)).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeUp},
 					StartsAt: []addr.IA{isd1}, EndsAt: []addr.IA{non_core_111},
@@ -430,13 +428,10 @@ func TestResolverWithRevocations(t *testing.T) {
 				segfetcher.Request{SegType: Core, Src: core_210, Dst: core_120},
 				segfetcher.Request{SegType: Core, Src: core_210, Dst: core_130},
 			},
-			ExpectCalls: func(db *mock_pathdb.MockPathDB) {
-				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_110, gomock.Any()).
-					Return(futureT, nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_120, gomock.Any()).
-					Return(futureT, nil)
-				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_130, gomock.Any()).
-					Return(futureT, nil)
+			ExpectCalls: func(db *mock_pathdb.MockDB) {
+				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_110).Return(futureT, nil)
+				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_120).Return(futureT, nil)
+				db.EXPECT().GetNextQuery(gomock.Any(), core_210, core_130).Return(futureT, nil)
 				db.EXPECT().Get(gomock.Any(), matchers.EqParams(&query.Params{
 					SegTypes: []seg.Type{seg.TypeCore},
 					StartsAt: []addr.IA{core_130}, EndsAt: []addr.IA{core_210},
@@ -447,10 +442,9 @@ func TestResolverWithRevocations(t *testing.T) {
 			ExpectRevcache: func(t *testing.T, revCache *mock_revcache.MockRevCache) {
 				key110 := revcache.Key{IA: core_110, IfId: graph.If_110_X_130_A}
 				ksMatcher := keySetContains{keys: []revcache.Key{key110}}
-				srev, err := path_mgmt.NewSignedRevInfo(&path_mgmt.RevInfo{})
-				require.NoError(t, err)
+				rev := &path_mgmt.RevInfo{}
 				revCache.EXPECT().Get(gomock.Any(), ksMatcher).Return(revcache.Revocations{
-					key110: srev,
+					key110: rev,
 				}, nil)
 				revCache.EXPECT().Get(gomock.Any(), gomock.Any()).AnyTimes()
 			},

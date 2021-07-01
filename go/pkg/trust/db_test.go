@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os/exec"
@@ -30,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/scionproto/scion/go/lib/addr"
-	"github.com/scionproto/scion/go/lib/scrypto/cppki"
 	"github.com/scionproto/scion/go/lib/xtest"
 	"github.com/scionproto/scion/go/pkg/command"
 	"github.com/scionproto/scion/go/pkg/trust"
@@ -38,13 +36,13 @@ import (
 	"github.com/scionproto/scion/go/scion-pki/trcs"
 )
 
-var update = flag.Bool("update", false, "set to true to regenerate certificate files")
+var updateNonDeterministic = xtest.UpdateNonDeterminsticGoldenFiles()
 
 var goldenDir = "./testdata/common"
 
 func TestUpdateCerts(t *testing.T) {
-	if !(*update) {
-		t.Skip("Specify -update to update certs")
+	if !(*updateNonDeterministic) {
+		t.Skip("Specify -update-non-deterministic to update certs")
 		return
 	}
 	dir, cleanF := xtest.MustTempDir("", "tmp")
@@ -98,22 +96,6 @@ func (m chainQueryMatcher) Matches(x interface{}) bool {
 
 func (m chainQueryMatcher) String() string {
 	return fmt.Sprintf("%+v, %+v", m.ia, m.skid)
-}
-
-type TRCIDMatcher struct {
-	ISD addr.ISD
-}
-
-func (m TRCIDMatcher) Matches(x interface{}) bool {
-	v, ok := x.(cppki.TRCID)
-	if !ok {
-		return false
-	}
-	return v.ISD == m.ISD
-}
-
-func (m TRCIDMatcher) String() string {
-	return fmt.Sprintf("TRCID has the wrong ISD %+v", m.ISD)
 }
 
 type ctxMatcher struct{}

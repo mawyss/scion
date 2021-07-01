@@ -17,7 +17,6 @@ package fake_test
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"io/ioutil"
 	"net"
 	"testing"
@@ -34,7 +33,7 @@ import (
 	"github.com/scionproto/scion/go/lib/xtest"
 )
 
-var update = flag.Bool("update", false, "set to true to update golden files")
+var update = xtest.UpdateGoldenFiles()
 
 func TestJSONConversion(t *testing.T) {
 	script := &fake.Script{
@@ -183,11 +182,6 @@ func TestSVCInfo(t *testing.T) {
 	c := fake.New(&fake.Script{})
 	assert.PanicsWithValue(t, "not implemented", func() { c.SVCInfo(nil, nil) })
 
-}
-
-func TestRevNotificationFromRaw(t *testing.T) {
-	c := fake.New(&fake.Script{})
-	assert.PanicsWithValue(t, "not implemented", func() { c.RevNotificationFromRaw(nil, nil) })
 }
 
 func TestRevNotification(t *testing.T) {
