@@ -26,6 +26,7 @@ import (
 	"github.com/scionproto/scion/go/lib/addr"
 	libepic "github.com/scionproto/scion/go/lib/epic"
 	"github.com/scionproto/scion/go/lib/serrors"
+	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
 	"github.com/scionproto/scion/go/lib/slayers/path/empty"
 	"github.com/scionproto/scion/go/lib/slayers/path/epic"
@@ -120,6 +121,43 @@ func (p *Path) EnableEpic() error {
 	return serrors.New("EPIC not supported")
 }
 
+func (p *Path) AddEpicPktID(ep *epic.Path) error {
+	info, err := ep.ScionPath.GetInfoField(0)
+	if err != nil {
+		return err
+	}
+	tsInfo := time.Unix(int64(info.Timestamp), 0)
+	timestamp, err := libepic.CreateTimestamp(tsInfo, time.Now())
+	if err != nil {
+		return err
+	}
+	p.EpicData.Counter = p.EpicData.Counter + 1
+	ep.PktID = epic.PktID{
+		Timestamp: timestamp,
+		Counter:   p.EpicData.Counter,
+	}
+	return nil
+}
+
+func (p Path) AddEpicHVFs(ep *epic.Path, s *slayers.SCION) error {
+	info, err := ep.ScionPath.GetInfoField(0)
+	if err != nil {
+		return err
+	}
+	phvf, err := libepic.CalcMac(p.EpicData.AuthPHVF, ep.PktID, s, info.Timestamp)
+	if err != nil {
+		return err
+	}
+	lhvf, err := libepic.CalcMac(p.EpicData.AuthLHVF, ep.PktID, s, info.Timestamp)
+	if err != nil {
+		return err
+	}
+
+	ep.PHVF = phvf[:epic.HVFLen]
+	ep.LHVF = lhvf[:epic.HVFLen]
+	return nil
+}
+
 func (p *Path) Reverse() error {
 	if p == nil || len(p.Raw) == 0 {
 		// Empty path doesn't need reversal.
@@ -143,7 +181,7 @@ func (p *Path) Reverse() error {
 		if !ok {
 			return serrors.New("Path type and path data do not match")
 		}
-		po = e.GetScionPath()
+		po = e.ScionPath
 		p.EpicData.enabled = false
 	}
 

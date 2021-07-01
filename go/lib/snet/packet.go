@@ -16,13 +16,11 @@ package snet
 
 import (
 	"net"
-	"time"
 
 	"github.com/google/gopacket"
 
 	"github.com/scionproto/scion/go/lib/addr"
 	"github.com/scionproto/scion/go/lib/common"
-	libepic "github.com/scionproto/scion/go/lib/epic"
 	"github.com/scionproto/scion/go/lib/serrors"
 	"github.com/scionproto/scion/go/lib/slayers"
 	"github.com/scionproto/scion/go/lib/slayers/path"
@@ -565,22 +563,15 @@ func (p *Packet) Serialize() error {
 	if p.Path.Type == scion.PathType {
 		sp := scionLayer.Path.(*scion.Raw)
 
-		// TODO(mawyss): remove, put to application logic
-		if p.Path.SupportsEpic() {
-			if err = p.Path.EnableEpic(); err != nil {
-				return err
-			}
-		}
-
 		if p.Path.EpicEnabled() {
 			// Convert to EPIC path type
 			ep := &epic.Path{
 				ScionPath: sp,
 			}
-			if addEpicPktID(ep, &p.Path.EpicData) != nil {
+			if (&p.Path).AddEpicPktID(ep) != nil {
 				return err
 			}
-			if addEpicHVFs(ep, &p.Path.EpicData, &scionLayer) != nil {
+			if p.Path.AddEpicHVFs(ep, &scionLayer) != nil {
 				return err
 			}
 
@@ -609,46 +600,6 @@ func (p *Packet) Serialize() error {
 	}
 	copy(p.Bytes, buffer.Bytes())
 	p.Bytes = p.Bytes[:len(buffer.Bytes())]
-	return nil
-}
-
-func addEpicPktID(ep *epic.Path, ed *spath.EpicData) error {
-	info, err := ep.ScionPath.GetInfoField(0)
-	if err != nil {
-		return err
-	}
-	tsInfo := time.Unix(int64(info.Timestamp), 0)
-	timestamp, err := libepic.CreateTimestamp(tsInfo, time.Now())
-	if err != nil {
-		return err
-	}
-	ep.PktID = epic.PktID{
-		Timestamp: timestamp,
-		Counter:   ed.Counter,
-	}
-
-	// Increase packet counter
-	ed.Counter = ed.Counter + 1
-	return nil
-}
-
-func addEpicHVFs(ep *epic.Path, ed *spath.EpicData, s *slayers.SCION) error {
-	info, err := ep.ScionPath.GetInfoField(0)
-	if err != nil {
-		return err
-	}
-
-	phvf, err := libepic.CalcMac(ed.AuthPHVF, ep.PktID, s, info.Timestamp)
-	if err != nil {
-		return err
-	}
-	lhvf, err := libepic.CalcMac(ed.AuthLHVF, ep.PktID, s, info.Timestamp)
-	if err != nil {
-		return err
-	}
-
-	ep.PHVF = phvf[:epic.HVFLen]
-	ep.LHVF = lhvf[:epic.HVFLen]
 	return nil
 }
 

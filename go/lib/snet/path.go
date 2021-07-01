@@ -55,11 +55,6 @@ type Path interface {
 	Metadata() *PathMetadata
 	// Copy create a copy of the path.
 	Copy() Path
-
-	// SupportsEpic returns whether the Path supports EPIC.
-	SupportsEpic() bool
-	// EnableEpic enables EPIC on this path.
-	EnableEpic() error
 }
 
 // PathInterface is an interface of the path.
@@ -125,7 +120,7 @@ type PathMetadata struct {
 	EpicAuths *EpicAuths
 }
 
-// EpicAuths is a containter for the authenticators used
+// EpicAuths is a container for the authenticators used
 // in EPIC to calculate the PHVF and LHVF.
 type EpicAuths struct {
 	AuthPHVF []byte
@@ -263,12 +258,4 @@ func (p *partialPath) Copy() Path {
 func (p *partialPath) String() string {
 	return fmt.Sprintf("{spath: %s, underlay: %s, dest: %s}",
 		p.spath.String(), p.underlay, p.destination)
-}
-
-func (p *partialPath) SupportsEpic() bool {
-	return p.spath.SupportsEpic()
-}
-
-func (p *partialPath) EnableEpic() error {
-	return p.spath.EnableEpic()
 }

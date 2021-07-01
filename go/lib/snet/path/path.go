@@ -76,14 +76,6 @@ func (p Path) String() string {
 		strings.Join(hops, ">"), p.Meta.MTU, p.NextHop)
 }
 
-func (p Path) SupportsEpic() bool {
-	return p.SPath.SupportsEpic()
-}
-
-func (p Path) EnableEpic() error {
-	return p.SPath.EnableEpic()
-}
-
 func fmtInterfaces(ifaces []snet.PathInterface) []string {
 	var hops []string
 	if len(ifaces) == 0 {

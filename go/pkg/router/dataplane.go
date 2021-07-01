@@ -665,7 +665,6 @@ func (p *scionPacketProcessor) processSCION() (processResult, error) {
 
 func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 
-	log.Debug("Received EPIC packet!")
 	epicPath, ok := p.scionLayer.Path.(*epic.Path)
 	if !ok {
 		return processResult{}, malformedPath
@@ -681,8 +680,7 @@ func (p *scionPacketProcessor) processEPIC() (processResult, error) {
 
 	result, err := p.process()
 	if err != nil {
-		// TODO(mawyss): Send back SCMP packet
-		return processResult{}, err
+		return result, err
 	}
 
 	if isPenultimate || isLast {
@@ -1423,10 +1421,25 @@ type scmpPacker struct {
 func (s scmpPacker) prepareSCMP(scmpH *slayers.SCMP, scmpP gopacket.SerializableLayer,
 	external bool, cause error) ([]byte, error) {
 
-	path, ok := s.scionL.Path.(*scion.Raw)
-	if !ok {
-		return nil, serrors.WithCtx(cannotRoute, "details", "unsupported path type",
-			"path type", s.scionL.Path.Type())
+	var path *scion.Raw
+	badPathErr := serrors.WithCtx(cannotRoute, "details", "unsupported path type",
+		"path type", s.scionL.PathType)
+	switch s.scionL.PathType {
+	case scion.PathType:
+		var ok bool
+		path, ok = s.scionL.Path.(*scion.Raw)
+		if !ok {
+			return nil, badPathErr
+		}
+	case epic.PathType:
+		epicPath, ok := s.scionL.Path.(*epic.Path)
+		if !ok {
+			return nil, badPathErr
+		}
+		path = epicPath.ScionPath
+		s.scionL.PathType = scion.PathType
+	default:
+		return nil, badPathErr
 	}
 
 	decPath, err := path.ToDecoded()

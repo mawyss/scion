@@ -215,14 +215,6 @@ func (p *path) Metadata() *snet.PathMetadata {
 	return nil
 }
 
-func (p *path) SupportsEpic() bool {
-	return p.spath.SupportsEpic()
-}
-
-func (p *path) EnableEpic() error {
-	return p.spath.EnableEpic()
-}
-
 func (p *path) Copy() snet.Path {
 	if p == nil {
 		return nil
