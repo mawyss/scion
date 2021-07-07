@@ -247,11 +247,11 @@ func (h HostSVC) IsMulticast() bool {
 }
 
 func (h HostSVC) Base() HostSVC {
-	return h & ^HostSVC(SVCMcast)
+	return h & ^SVCMcast
 }
 
 func (h HostSVC) Multicast() HostSVC {
-	return h | HostSVC(SVCMcast)
+	return h | SVCMcast
 }
 
 func (h HostSVC) Copy() HostAddr {
@@ -310,6 +310,9 @@ func HostFromRaw(b []byte, htype HostAddrType) (HostAddr, error) {
 		}
 		return HostIPv6(b[:HostLenIPv6]), nil
 	case HostTypeSVC:
+		if len(b) < HostLenSVC {
+			return nil, serrors.WithCtx(ErrMalformedHostAddrType, "type", htype)
+		}
 		return HostSVC(binary.BigEndian.Uint16(b)), nil
 	default:
 		return nil, serrors.WithCtx(ErrBadHostAddrType, "type", htype)
